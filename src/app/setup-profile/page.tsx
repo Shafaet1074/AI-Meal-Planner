@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useSelector } from "react-redux";
 import { createClient } from "@supabase/supabase-js";
-import { Button, Spin, message } from "antd";
+import {  Spin, message } from "antd";
 
 /* ---------- Supabase client ---------- */
 const supabase = createClient(
@@ -121,29 +121,29 @@ export default function SetupProfilePage() {
   }, [bmiValue]);
 
   /* ---------- UI step content ---------- */
-  const StepCard: React.FC<{ img: string; title: string; subtitle?: string }> = ({
-    img,
-    title,
-    subtitle,
-    children,
-  }) => {
-    return (
-      <div className="w-full max-w-2xl bg-white/90 backdrop-blur-md rounded-2xl shadow-lg overflow-hidden flex flex-col md:flex-row">
-        <div className="relative w-full md:w-1/2 h-48 md:h-auto">
-          <Image src={img} alt={title} fill className="object-cover" priority />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-          <div className="absolute bottom-4 left-4 text-white">
-            <h3 className="text-xl font-bold">{title}</h3>
-            {subtitle && <p className="text-sm opacity-90">{subtitle}</p>}
-          </div>
-        </div>
+  // const StepCard: React.FC<{ img: string; title: string; subtitle?: string }> = ({
+  //   img,
+  //   title,
+  //   subtitle,
+  //   children,
+  // }) => {
+  //   return (
+  //     <div className="w-full max-w-2xl bg-white/90 backdrop-blur-md rounded-2xl shadow-lg overflow-hidden flex flex-col md:flex-row">
+  //       <div className="relative w-full md:w-1/2 h-48 md:h-auto">
+  //         <Image src={img} alt={title} fill className="object-cover" priority />
+  //         <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+  //         <div className="absolute bottom-4 left-4 text-white">
+  //           <h3 className="text-xl font-bold">{title}</h3>
+  //           {subtitle && <p className="text-sm opacity-90">{subtitle}</p>}
+  //         </div>
+  //       </div>
 
-        <div className="p-6 w-full md:w-1/2">
-          {children}
-        </div>
-      </div>
-    );
-  };
+  //       <div className="p-6 w-full md:w-1/2">
+  //         {children}
+  //       </div>
+  //     </div>
+  //   );
+  // };
 
   /* ---------- navigation ---------- */
   const goNext = () => {
