@@ -47,7 +47,7 @@ const calculateBMI = () => {
 
 
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: { preventDefault: () => void; }) => {
     e.preventDefault();
     calculateBMI();
     // Here you’d POST formData + BMI to backend
