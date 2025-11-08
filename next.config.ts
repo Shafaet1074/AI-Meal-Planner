@@ -4,10 +4,7 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   reactStrictMode: true,
-  experimental: {
-    appDir: true, // needed for App Router
-  },
-  output: "standalone", // allows server-side routes (API) to work
+  output: "standalone", // use standalone build, not static export
 };
 
 module.exports = nextConfig;
