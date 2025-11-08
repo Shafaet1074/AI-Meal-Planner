@@ -18,7 +18,7 @@ export default function UserProfileSetup() {
   const [bmi, setBmi] = useState(null);
   const [bmiStatus, setBmiStatus] = useState("");
 
-  const handleChange = (e) => {
+  const handleChange = (e: { target: { name: string; value: string; }; }) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
