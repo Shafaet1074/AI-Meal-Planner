@@ -29,8 +29,9 @@ const supabase = createClient(
 );
 
 export default function DashboardPage() {
-  const [collapsed, setCollapsed] = useState(false);
-  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [collapsed, setCollapsed] = useState(false); // Desktop sidebar collapse
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false); // Mobile menu
+  const [drawerVisible, setDrawerVisible] = useState(false); // Profile drawer
   const [activeMenu, setActiveMenu] = useState("1");
   const [isMobile, setIsMobile] = useState(false);
   const [profileData, setProfileData] = useState<any>(null);
@@ -42,7 +43,7 @@ export default function DashboardPage() {
     const handleResize = () => {
       const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
-      if (mobile) setCollapsed(true);
+      if (mobile) setCollapsed(true); // collapse desktop sidebar on mobile
     };
     handleResize();
     window.addEventListener("resize", handleResize);
@@ -59,7 +60,7 @@ export default function DashboardPage() {
   /* 🔹 Fetch profile data from Supabase */
   const fetchProfileData = async () => {
     if (!user?.email) return;
-    
+
     setLoadingProfile(true);
     try {
       const { data, error } = await supabase
@@ -80,11 +81,11 @@ export default function DashboardPage() {
   /* 🔹 Format activity level for display */
   const formatActivityLevel = (level: string) => {
     const levels: { [key: string]: string } = {
-      "sedentary": "Sedentary (little or no exercise)",
-      "light": "Lightly Active (1–3 days/week)",
-      "moderate": "Moderately Active (3–5 days/week)",
-      "active": "Active (6–7 days/week)",
-      "very-active": "Very Active (intense daily exercise)"
+      sedentary: "Sedentary (little or no exercise)",
+      light: "Lightly Active (1–3 days/week)",
+      moderate: "Moderately Active (3–5 days/week)",
+      active: "Active (6–7 days/week)",
+      "very-active": "Very Active (intense daily exercise)",
     };
     return levels[level] || level;
   };
@@ -92,9 +93,9 @@ export default function DashboardPage() {
   /* 🔹 Format goal for display */
   const formatGoal = (goal: string) => {
     const goals: { [key: string]: string } = {
-      "lose": "Lose Weight",
-      "maintain": "Maintain Weight",
-      "gain": "Gain Weight"
+      lose: "Lose Weight",
+      maintain: "Maintain Weight",
+      gain: "Gain Weight",
     };
     return goals[goal] || goal;
   };
@@ -102,10 +103,10 @@ export default function DashboardPage() {
   /* 🔹 Get BMI category color */
   const getBMIColor = (category: string) => {
     const colors: { [key: string]: string } = {
-      "Underweight": "blue",
-      "Normal": "green",
-      "Overweight": "orange",
-      "Obese": "red"
+      Underweight: "blue",
+      Normal: "green",
+      Overweight: "orange",
+      Obese: "red",
     };
     return colors[category] || "default";
   };
@@ -180,16 +181,17 @@ export default function DashboardPage() {
 
       {/* Main Content */}
       <Layout className="flex-1">
-        {/* ✅ Custom Header */}
+        {/* Custom Header */}
         <div className="flex items-center justify-between bg-white shadow-sm sticky top-0 z-50 h-16 px-3 md:px-6">
-          {/* Left side: Collapse/Menu button + logo */}
+          {/* Left side: Hamburger for mobile + greeting */}
           <div className="flex items-center gap-3">
-            {/* <Button
-              type="text"
-              icon={<MenuOutlined className="text-xl" />}
-              onClick={() => isMobile ? setCollapsed(!collapsed) : setCollapsed(!collapsed)}
-              className="flex items-center justify-center"
-            /> */}
+            {isMobile && (
+              <Button
+                type="text"
+                icon={<MenuOutlined className="text-xl" />}
+                onClick={() => setMobileDrawerOpen(true)}
+              />
+            )}
             <h1 className="text-green-600 font-bold text-lg md:text-xl">
               {isMobile
                 ? "SmartMealAI"
@@ -219,8 +221,8 @@ export default function DashboardPage() {
           title="SmartMealAI Menu"
           placement="left"
           closable
-          onClose={() => setCollapsed(true)}
-          open={!collapsed}
+          onClose={() => setMobileDrawerOpen(false)}
+          open={mobileDrawerOpen}
           bodyStyle={{ padding: 0 }}
         >
           <Menu
@@ -228,7 +230,7 @@ export default function DashboardPage() {
             selectedKeys={[activeMenu]}
             onClick={(e) => {
               setActiveMenu(e.key);
-              setCollapsed(true);
+              setMobileDrawerOpen(false);
             }}
             items={menuItems}
           />
@@ -243,12 +245,11 @@ export default function DashboardPage() {
         open={drawerVisible}
         width={400}
         extra={
-          <Button 
-            icon={<EditOutlined />} 
-            type="primary" 
+          <Button
+            icon={<EditOutlined />}
+            type="primary"
             onClick={() => {
               setDrawerVisible(false);
-              // Navigate to profile setup page for editing
               window.location.href = "/setup-profile";
             }}
           >
@@ -263,7 +264,7 @@ export default function DashboardPage() {
         ) : (
           <div className="space-y-6">
             {/* Profile Header */}
-            <div  className="flex gap-6 items-center space-x-4">
+            <div className="flex gap-6 items-center space-x-4">
               <Avatar
                 size={80}
                 src={user.photoURL || undefined}
@@ -283,7 +284,6 @@ export default function DashboardPage() {
             {/* Personal Information */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold border-b pb-2">Personal Information</h3>
-              
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm text-gray-500">Gender</label>
@@ -295,15 +295,11 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <label className="text-sm text-gray-500">Height</label>
-                  <p className="font-medium">
-                    {profileData?.height ? `${profileData.height} cm` : "Not set"}
-                  </p>
+                  <p className="font-medium">{profileData?.height ? `${profileData.height} cm` : "Not set"}</p>
                 </div>
                 <div>
                   <label className="text-sm text-gray-500">Weight</label>
-                  <p className="font-medium">
-                    {profileData?.weight ? `${profileData.weight} kg` : "Not set"}
-                  </p>
+                  <p className="font-medium">{profileData?.weight ? `${profileData.weight} kg` : "Not set"}</p>
                 </div>
               </div>
             </div>
@@ -312,7 +308,6 @@ export default function DashboardPage() {
             {(profileData?.bmi || profileData?.bmi_category) && (
               <div className="space-y-3">
                 <h3 className="text-lg font-semibold border-b pb-2">Health Metrics</h3>
-                
                 {profileData?.bmi && (
                   <div className="flex justify-between items-center">
                     <span className="text-gray-600">BMI</span>
@@ -332,14 +327,12 @@ export default function DashboardPage() {
             {/* Fitness Goals */}
             <div className="space-y-3">
               <h3 className="text-lg font-semibold border-b pb-2">Fitness Goals</h3>
-              
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">Activity Level</span>
                 <span className="font-semibold text-right">
                   {profileData?.activity_level ? formatActivityLevel(profileData.activity_level) : "Not set"}
                 </span>
               </div>
-              
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">Primary Goal</span>
                 <Tag color={profileData?.goal === 'lose' ? 'red' : profileData?.goal === 'gain' ? 'blue' : 'green'}>
