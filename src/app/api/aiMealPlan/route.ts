@@ -1,95 +1,77 @@
-export const dynamic = "force-dynamic"; 
+import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
+
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY!,
+});
 
 export async function POST(req: Request) {
   try {
     const { bmi, goal, gender } = await req.json();
 
     if (!bmi || !goal || !gender) {
-      return NextResponse.json({ error: "Missing profile info" }, { status: 400 });
+      return NextResponse.json({ error: "Missing info" }, { status: 400 });
     }
 
-    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-    if (!OPENROUTER_API_KEY) {
-      return NextResponse.json(
-        { error: "OpenRouter API key not configured" },
-        { status: 500 }
-      );
-    }
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ 
+        role: "user", 
+        parts: [{ text: `User: ${gender}, BMI: ${bmi}, Goal: ${goal}. Location: Bangladesh.` }] 
+      }],
+      config: {
+        systemInstruction: `You are an elite clinical nutritionist specializing in Bangladeshi dietetics.
+        Your task is to generate a comprehensive daily meal plan AND strategic health insights.
 
-    const prompt = `
-You are a certified nutritionist and chef specializing in Bangladeshi cuisine.
-Generate a healthy, culturally relevant daily food plan based on:
-
-- BMI: ${bmi}
-- Goal: ${goal}
-- Gender: ${gender}
-
-Return ONLY valid JSON in this format:
-{
-  "breakfast": { "items": ["Item 1", "Item 2"], "calories": "XXX kcal" },
-  "lunch": { "items": ["Item 1", "Item 2"], "calories": "XXX kcal" },
-  "snacks": { "items": ["Item 1", "Item 2"], "calories": "XXX kcal" },
-  "dinner": { "items": ["Item 1", "Item 2"], "calories": "XXX kcal" },
-  "nutrition_summary": "Short daily nutrition summary"
-}`;
-
-    console.log("🤖 Sending prompt to OpenRouter...");
-
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "deepseek/deepseek-chat-v3.1:free",
-        messages: [
-          {
-            role: "system",
-            content: "You are a professional dietitian. Respond ONLY with valid JSON.",
+        REAL-LIFE PROBLEM SOLVING:
+        1. Cultural Context: Focus on local ingredients (Shak, Mach, Daal, seasonal Vorta).
+        2. Carb Control: Address the 'over-reliance on white rice' problem by suggesting specific portion controls or fiber-rich alternatives.
+        3. Oil Mitigation: Provide hacks to reduce 'Tel' (oil) in traditional cooking without losing flavor.
+        4. Actionable Insights: Tips must be specific to this user's BMI and Goal (e.g., 'To reduce your BMI of ${bmi}, try walking 10 mins after your heavy lunch').
+        
+        RESPOND ONLY IN VALID JSON.`,
+        
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "object",
+          properties: {
+            breakfast: { 
+                type: "object", 
+                properties: { items: { type: "array", items: { type: "string" } }, calories: { type: "string" } },
+                required: ["items", "calories"]
+            },
+            lunch: { 
+                type: "object", 
+                properties: { items: { type: "array", items: { type: "string" } }, calories: { type: "string" } },
+                required: ["items", "calories"]
+            },
+            snacks: { 
+                type: "object", 
+                properties: { items: { type: "array", items: { type: "string" } }, calories: { type: "string" } },
+                required: ["items", "calories"]
+            },
+            dinner: { 
+                type: "object", 
+                properties: { items: { type: "array", items: { type: "string" } }, calories: { type: "string" } },
+                required: ["items", "calories"]
+            },
+            nutrition_summary: { type: "string" },
+            // NEW: Integrated AI Tips
+            aiTips: { 
+                type: "array", 
+                items: { type: "string" },
+                description: "4 highly specific, culturally relevant health hacks for this specific user profile."
+            }
           },
-          { role: "user", content: prompt },
-        ],
-        max_tokens: 1500,
-        temperature: 0.6,
-      }),
+          required: ["breakfast", "lunch", "snacks", "dinner", "nutrition_summary", "aiTips"]
+        },
+      },
     });
 
-    console.log("🌐 OpenRouter response status:", response.status);
+    return NextResponse.json(JSON.parse(response.text));
 
-    const data = await response.json();
-    console.log("🧩 OpenRouter raw data:", data);
-
-    const content = data?.choices?.[0]?.message?.content;
-
-    if (!content) {
-      console.error("⚠️ No message content from AI");
-      return NextResponse.json({ error: "No response from AI" }, { status: 500 });
-    }
-
-    // 🧠 Try extracting JSON safely
-    const match = content.match(/\{[\s\S]*\}/);
-    if (!match) {
-      console.error("⚠️ AI response missing JSON:", content);
-      return NextResponse.json({ error: "Invalid AI JSON format" }, { status: 500 });
-    }
-
-    let plan;
-    try {
-      plan = JSON.parse(match[0]);
-    } catch (parseErr) {
-      console.error("💥 JSON Parse Error:", parseErr);
-      return NextResponse.json({ error: "Failed to parse AI response" }, { status: 500 });
-    }
-
-    console.log("✅ Parsed AI Plan:", plan);
-    return NextResponse.json(plan);
-  } catch (err) {
-    console.error("💥 AI meal plan error:", err);
-    return NextResponse.json(
-      { error: "Failed to generate plan", details: (err as Error).message },
-      { status: 500 }
-    );
+  } catch (err: any) {
+    console.error("Gemini Error:", err);
+    return NextResponse.json({ error: "API Error", details: err.message }, { status: 500 });
   }
 }

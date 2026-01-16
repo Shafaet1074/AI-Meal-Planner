@@ -6,11 +6,16 @@ import {
   Typography,
   Tabs,
   Card,
-  Spin,
+  Skeleton,
   Button,
   message,
   Steps,
   Divider,
+  Row,
+  Col,
+  Statistic,
+  Tag,
+  Empty,
 } from "antd";
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -19,6 +24,9 @@ import {
   SmileOutlined,
   FireOutlined,
   HeartOutlined,
+  CheckCircleOutlined,
+  InfoCircleOutlined,
+  SafetyCertificateOutlined
 } from "@ant-design/icons";
 
 const { Title, Text, Paragraph } = Typography;
@@ -32,14 +40,11 @@ export default function AIFoodPlan() {
   const [loading, setLoading] = useState(true);
   const [plan, setPlan] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
-
-  // 🌿 AI Tips States
   const [aiTips, setAiTips] = useState<string[]>([]);
-  const [loadingTips, setLoadingTips] = useState<boolean>(false);
 
   const fetchData = async () => {
     if (!user?.email) {
-      message.warning("Please log in to view your AI meal plan.");
+      message.warning("Authentication required to generate plan.");
       setLoading(false);
       return;
     }
@@ -53,13 +58,14 @@ export default function AIFoodPlan() {
         .single();
 
       if (error || !profileData) {
-        message.error("Profile not found for this user.");
+        message.error("Please complete your profile first.");
         setLoading(false);
         return;
       }
 
       setProfile(profileData);
 
+   
       const res = await fetch("/api/aiMealPlan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -70,266 +76,219 @@ export default function AIFoodPlan() {
 
       if (res.ok && !result.error) {
         setPlan(result);
-        message.success("Meal Plan Loaded Successfully!");
+      
+        setAiTips(result.aiTips || []); 
+        message.success("AI Ecosystem Synchronized");
       } else {
-        message.error(result.error || "Failed to load meal plan");
+        message.error(result.error || "Generation failed");
       }
     } catch (err) {
       console.error(err);
-      message.error("Error loading meal plan");
+      message.error("Connection error");
     } finally {
       setLoading(false);
     }
   };
 
-  // 🧠 Fetch AI Health Tips
-useEffect(() => {
-  const fetchAiHealthTips = async () => {
-    if (!profile) return;
-    try {
-      setLoadingTips(true); // ✅ Start loading
-      const res = await fetch("/api/aiHealthTips", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bmi: profile.bmi,
-          goal: profile.goal,
-          gender: profile.gender,
-        }),
-      });
-
-      const data = await res.json();
-      console.log("🧩 AI Tips from API:", data);
-      setAiTips(data.aiTips || []);
-    } catch (err) {
-      console.error("💥 Error fetching AI health tips:", err);
-    } finally {
-      setLoadingTips(false); // ✅ End loading
-    }
-  };
-
-  fetchAiHealthTips();
-}, [profile]);
-
-
+  
   useEffect(() => {
     if (user) fetchData();
   }, [user]);
 
-  // useEffect(() => {
-  //   if (profile) fetchAITips();
-  // }, [profile]);
-
-  // 🧠 Helper
-  const getGoalMessage = (bmi: number, goal: string) => {
-    if (goal === "Lose Weight")
-      return `Focus on nutrient-dense meals and stay consistent. You’re closer than you think 💪`;
-    if (goal === "Maintain Weight")
-      return `Consistency is your superpower 🧘‍♂️ — keep balanced meals and hydration steady.`;
-    if (goal === "Gain Weight")
-      return `Fuel your progress 🍗 — lean proteins and carbs will build your strength steadily.`;
-
-    if (bmi < 18.5)
-      return `Include more calorie-rich, wholesome foods in your diet 🍠.`;
-    if (bmi >= 25)
-      return `Stay mindful of portions 🥗 — small adjustments can make big changes.`;
-
-    return `Follow this meal plan for your health goals 🌱.`;
-  };
-
   const mealSchedule = [
-    { time: "8:00 AM", meal: "Breakfast", icon: "🍳" },
-    { time: "12:30 PM", meal: "Lunch", icon: "🍛" },
-    { time: "4:30 PM", meal: "Snacks", icon: "☕" },
-    { time: "8:00 PM", meal: "Dinner", icon: "🍲" },
+    { time: "08:00", meal: "Breakfast", icon: "🍳" },
+    { time: "13:00", meal: "Lunch", icon: "🍛" },
+    { time: "17:00", meal: "Snacks", icon: "☕" },
+    { time: "20:30", meal: "Dinner", icon: "🍲" },
   ];
 
-  if (loading) {
-    return (
-      <div className="flex flex-col justify-center items-center h-[60vh] gap-4 text-center px-4">
-        <Spin size="large" tip="Generating your personalized meal plan..." />
-        <Text type="secondary">AI is analyzing your nutrition data 🤖</Text>
-      </div>
-    );
-  }
-
-  if (!plan) {
-    return (
-      <div className="flex flex-col justify-center items-center h-[50vh] gap-6 px-4 text-center">
-        <Text type="secondary" className="text-lg">
-          No meal plan available yet. Try updating your profile and refresh.
-        </Text>
-        <Button
-          icon={<ReloadOutlined />}
-          onClick={fetchData}
-          type="primary"
-          className="mt-2"
-        >
-          Regenerate Plan
-        </Button>
-      </div>
-    );
-  }
-
-  const tabItems = [
+  const tabItems = plan ? [
     { key: "breakfast", label: "Breakfast", items: plan.breakfast },
     { key: "lunch", label: "Lunch", items: plan.lunch },
     { key: "snacks", label: "Snacks", items: plan.snacks },
     { key: "dinner", label: "Dinner", items: plan.dinner },
-  ];
+  ] : [];
 
   return (
-    <div className="max-w-8xl mx-auto px-0 sm:px-6 lg:px-12 py-2 space-y-10">
-      {/* Header */}
-      <div className="text-center space-y-2">
-        <h1 className="text-green-600 font-semibold text-2xl sm:text-3xl">
-          Hello, {user?.displayName || "Health Enthusiast"} 👋
-        </h1>
-        <p className="text-gray-700 text-base sm:text-lg">
-          Here’s your AI-personalized meal plan based on your health data.
-        </p>
-      </div>
-
-      {/* Profile Summary */}
-      {profile && (
-        <div className="bg-white shadow-lg rounded-2xl border border-gray-100 p-5 sm:p-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full">
-              <Badge label="BMI" value={profile.bmi} color="green" />
-              <Badge label="Goal" value={profile.goal} color="blue" />
-              <Badge label="Gender" value={profile.gender} color="amber" />
+    <div className=" space-y-8 bg-[#f9fbf9] min-h-screen">
+      
+   
+      <Card style={{ marginBottom: 40 }} className="rounded-2xl border-none shadow-sm bg-gradient-to-br from-green-800 to-emerald-950 text-white overflow-hidden">
+        <Row gutter={[24, 24]} align="middle">
+          <Col xs={24} md={14} className="p-8">
+       
+            <Title level={1} className="!text-black  text-3xl sm:!text-4xl">
+              Hello, {user?.displayName?.split(" ")[0] || "User"} 👋
+            </Title>
+            <p className=" text-lg mt-4 opacity-90 leading-relaxed">
+              Your personalized Bangladeshi meal plan is calibrated for a **{profile?.goal || 'Health'}** objective.
+            </p>
+            <Button 
+              icon={<ReloadOutlined />} 
+              onClick={fetchData}
+              className="mt-6 h-12 rounded-full border-none bg-white text-emerald-900 font-bold hover:bg-emerald-50 shadow-lg"
+            >
+              Regenerate Plan
+            </Button>
+          </Col>
+          <Col xs={24} md={10} className="p-4 sm:p-8">
+            <div className="grid grid-cols-2 gap-4 p-6 rounded-xl bg-white/10  border border-white/20 shadow-md">
+              <Statistic 
+                title={<span className=" text-lg uppercase font-bold tracking-widest">Target Energy</span>}
+                value={plan?.nutrition_summary?.match(/\d+/)?.[0] || '---'}
+                suffix={<small className="text-white/60 ml-1">kcal</small>}
+                valueStyle={{  fontWeight: '900', fontSize: '2rem' }}
+              />
+              <Statistic 
+                title={<span className="text-lg uppercase font-bold tracking-widest">Hydration</span>}
+                value="2.5"
+                suffix={<small className="text-white/60 ml-1">L</small>}
+                valueStyle={{ fontWeight: '900', fontSize: '2rem' }}
+              />
             </div>
+          </Col>
+        </Row>
+      </Card>
+
+
+      <div className="flex flex-wrap gap-4">
+        <Badge label="Metabolic BMI" value={profile?.bmi || "--"} color="green" />
+        <Badge label="Primary Goal" value={profile?.goal || "--"} color="blue" />
+        <Badge label="Bio Profile" value={profile?.gender || "--"} color="amber" />
+      </div>
+
+      <Row gutter={[32, 32]}>
+     
+        <Col xs={24} lg={16}>
+          <div className="flex justify-between items-center mb-6">
+            <Title level={3} className="!m-0 text-gray-800">Daily Meal Plan</Title>
+            <Text type="secondary" className="hidden sm:inline">
+              <InfoCircleOutlined className="mr-1"/> Locally Sourced Ingredients
+            </Text>
           </div>
 
-          <Paragraph className="mt-3 text-gray-600 italic text-sm sm:text-base">
-            {getGoalMessage(profile.bmi, profile.goal)}
-          </Paragraph>
-          
-        </div>
-      )}
-
-      {/* Tabs */}
-      <Tabs
-        className="w-full"
-        defaultActiveKey="breakfast"
-        items={tabItems.map((tab) => ({
-          key: tab.key,
-          label: tab.label,
-          children: (
-            <Card className="shadow-md rounded-xl mt-4 border border-gray-100 hover:shadow-lg transition-all">
-             <div style={{display:'flex', justifyContent:'space-between'}}>
-               <Title
-                level={4}
-                className="text-green-700 mb-3 !text-lg sm:!text-xl"
-              >
-                Recommended Items
-              </Title>
-              <Button
-            icon={<ReloadOutlined />}
-            onClick={fetchData}
-            type="primary"
-            className="bg-green-600 hover:bg-green-700"
-          >
-            Regenerate Plan
-          </Button>
-             </div>
-              {tab.items?.items ? (
-                <ul className="list-disc pl-5 space-y-1 text-gray-700">
-                  {tab.items.items.map((food: string, i: number) => (
-                    <li key={i} className="font-medium">
-                      {food}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <Paragraph type="secondary" className="mt-2">
-                  No suggestions available yet.
-                </Paragraph>
-              )}
-              {tab.items?.calories && (
-                <Paragraph className="mt-3 text-gray-600 text-sm sm:text-base">
-                  <strong>Calories:</strong> {tab.items.calories}
-                </Paragraph>
-              )}
+          {loading ? (
+            <Card className="rounded-3xl shadow-sm border-none bg-white p-6">
+              <Skeleton active paragraph={{ rows: 12 }} />
             </Card>
-          ),
-        }))}
-      />
+          ) : plan ? (
+            <Tabs
+              defaultActiveKey="breakfast"
+              type="card"
+              className="professional-tabs"
+              items={tabItems.map((tab) => ({
+                key: tab.key,
+                label: <span className="px-4 py-2 font-medium">{tab.label}</span>,
+                children: (
+                  <Card className="rounded-3xl shadow-md border-none bg-white p-4">
+                    <div className="flex flex-col md:flex-row gap-8">
+                      <div className="flex-1">
+                        <Title level={4} className="text-emerald-900 mb-6 flex items-center">
+                          <CheckCircleOutlined className="mr-2 text-emerald-500" /> 
+                          AI Recommendations
+                        </Title>
+                        <ul className="space-y-4">
+                          {tab.items?.items?.map((item: string, i: number) => (
+                            <li key={i} className="flex items-start gap-4 text-gray-700 text-lg bg-emerald-50/30 p-3 rounded-2xl border border-emerald-50">
+                              <span className="mt-2 w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="md:w-56 bg-gradient-to-b from-green-50 to-green-100 rounded-3xl p-8 flex flex-col items-center justify-center border border-green-200 shadow-inner">
+                        <FireOutlined className="text-orange-500 text-4xl mb-3 animate-pulse" />
+                        <Text type="secondary" className="uppercase text-[10px] font-black tracking-widest text-orange-800/60">Calories</Text>
+                        <Title level={3} className="!m-0 text-orange-700">{tab.items?.calories || "N/A"}</Title>
+                      </div>
+                    </div>
+                  </Card>
+                ),
+              }))}
+            />
+          ) : (
+            <Empty description="Please refresh to load plan" />
+          )}
 
-      {/* 🌿 AI Tips Section */}
-      <div style={{ marginTop: 30 }} className="bg-green-50 rounded-xl shadow-md p-5 sm:p-6">
-        <div className="flex items-center gap-2 mb-3">
-          <BulbOutlined className="text-green-600 text-2xl" />
-          <Title level={4} className="!mb-0 text-green-700 !text-lg sm:!text-xl">
-            AI Health Tips 💡
-          </Title>
-        </div>
-        {loadingTips ? (
-          <div className="flex justify-center py-4">
-            <Spin size="small" tip="Fetching health insights..." />
-          </div>
-        ) : (
-          <ul className="space-y-2 text-gray-700 text-sm sm:text-base">
-            {aiTips.map((tip, i) => (
-              <li key={i}>{tip}</li>
-            ))}
-          </ul>
-        )}
-      </div>
 
-      {/* Suggested Meal Schedule */}
-      <div className="p-5 sm:p-6 bg-blue-50 shadow-md rounded-xl border border-blue-100">
-        <Title level={4} className="text-blue-700 mb-4 !text-lg sm:!text-xl">
-          Suggested Meal Schedule 🕒
-        </Title>
-        <div className="overflow-x-auto">
-          <Steps
-            responsive
-            size="small"
-            current={4}
-            items={mealSchedule.map((m) => ({
-              title: `${m.icon} ${m.meal}`,
-              description: m.time,
-              icon: <FireOutlined className="text-blue-600" />,
-            }))}
-          />
-        </div>
-      </div>
+       <Card 
+            style={{marginTop:20}}
+            title={<span className="font-extrabold text-blue-900">Optimal Metabolic Window</span>} 
+            className="rounded-3xl shadow-lg border-none bg-gradient-to-b from-blue-50 to-indigo-50"
+          >
+            <Steps
+              direction="vertical"
+              size="small"
+              current={-1}
+              items={mealSchedule.map((m) => ({
+                title: <span className="text-sm font-bold text-blue-900">{m.meal}</span>,
+                subTitle: <span className="text-xs font-black text-blue-600/60">{m.time}</span>,
+                icon: <div className="bg-white p-2 rounded-xl shadow-sm border border-blue-100 text-xl">{m.icon}</div>
+              }))}
+            />
+          </Card>
+        </Col>
 
-      {/* Goal Motivation Section */}
-      <div className="bg-blue-50 border-pink-200 text-center shadow-sm p-5 sm:p-6 rounded-xl">
-        <SmileOutlined className="text-pink-500 text-3xl mb-2" />
-        <Title level={4} className="text-red-800 mb-1 !text-lg sm:!text-xl">
-          Goal Motivation
-        </Title>
-        <Paragraph className="text-gray-700 italic text-sm sm:text-base">
-          “Every bite you take is a step closer to the best version of yourself.”
-        </Paragraph>
-      </div>
+    
+        <Col xs={24} lg={8} className="space-y-8" style={{marginTop:100}}>
 
-      {/* Emotional Ending Line */}
+          <Card 
+            title={<span className="font-extrabold text-emerald-900"><BulbOutlined className="text-yellow-500 mr-2" /> Actionable Insights</span>} 
+            className="rounded-3xl shadow-lg border-none bg-white overflow-hidden"
+          >
+            {loading ? (
+              <Skeleton active paragraph={{ rows: 6 }} />
+            ) : aiTips.length > 0 ? (
+              <div className="space-y-4">
+                {aiTips.map((tip, i) => (
+                  <div key={i} className="flex gap-4 p-4 bg-amber-50/40 rounded-2xl border border-amber-100 group hover:bg-amber-50 transition-colors">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-amber-200 text-amber-800 font-black text-xs shrink-0">
+                      {i + 1}
+                    </div>
+                    <Text className="text-gray-700 leading-snug text-sm font-medium">
+                      {tip}
+                    </Text>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No specific tips yet" />
+            )}
+          </Card>
+
+
+         
+        </Col>
+      </Row>
+
+
       <Divider />
-      <Paragraph className="text-center text-gray-500 italic text-sm sm:text-base">
-        <HeartOutlined className="text-red-700 mr-2" />
-        “Stay kind to your body — it’s been taking care of you since day one.”
-      </Paragraph>
+
+      <div className="text-center py-12">
+        <SmileOutlined className="text-emerald-500 text-4xl mb-6" />
+        <Title level={4} className="!m-0 text-gray-800 tracking-tight">Your health is an investment, not an expense.</Title>
+        <Paragraph className="text-gray-500 italic mt-4 max-w-lg mx-auto leading-relaxed">
+          “Stay consistent with your choices today for a stronger version of yourself tomorrow.”
+        </Paragraph>
+        <div className="mt-8 flex items-center justify-center gap-2 text-emerald-600 font-bold bg-emerald-50 w-max mx-auto px-6 py-2 rounded-full border border-emerald-100">
+          <HeartOutlined /> Precision Nutrition Engine v2.5
+        </div>
+      </div>
     </div>
   );
 }
 
-// Small reusable badge
+// PROFESSIONALLY STYLED BADGE COMPONENT
 function Badge({ label, value, color }: any) {
   const colorMap: any = {
-    green: "bg-green-50 text-green-700 border-green-100",
+    green: "bg-emerald-50 text-emerald-700 border-emerald-100",
     blue: "bg-blue-50 text-blue-700 border-blue-100",
-    amber: "bg-amber-50 text-amber-700 border-amber-100",
+    amber: "bg-orange-50 text-orange-700 border-orange-100",
   };
   return (
-    <div
-      className={`flex flex-col justify-center px-4 py-3 rounded-xl border shadow-sm ${colorMap[color]} text-center w-full`}
-    >
-      <p className="text-xs sm:text-sm text-gray-500">{label}</p>
-      <p className="font-semibold text-base sm:text-lg">{value}</p>
+    <div className={`px-8 py-5 rounded-3xl border shadow-sm ${colorMap[color]} transition-all hover:-translate-y-1 hover:shadow-md cursor-default`}>
+      <p className="text-[10px] uppercase tracking-widest font-black opacity-50 mb-1">{label}</p>
+      <p className="font-black text-xl m-0">{value}</p>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-export const dynamic = "force-dynamic"; 
+export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -9,22 +9,10 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-/* ---------- Helper: Extract numeric calories ---------- */
 function extractCaloriesFromRow(row: any): number {
-  const candidates = [
-    "approx_calories",
-    "calories",
-    "estimated_calories",
-    "est_calories",
-    "ai_estimated_calories",
-    "ai_calories",
-    "calorie_estimate",
-    "calories_estimate",
-    "kcal",
-  ];
-
+  const candidates = ["calories", "approx_calories", "estimated_calories", "kcal"];
   for (const key of candidates) {
-    if (row[key] != null && row[key] !== "") {
+    if (row[key] != null) {
       const n = Number(row[key]);
       if (!Number.isNaN(n)) return n;
     }
@@ -32,131 +20,84 @@ function extractCaloriesFromRow(row: any): number {
   return 0;
 }
 
-/* ---------- API Handler ---------- */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const user_id = searchParams.get("user_id");
   const startParam = searchParams.get("start");
   const endParam = searchParams.get("end");
 
-  if (!user_id) {
-    return NextResponse.json({ error: "Missing user_id" }, { status: 400 });
-  }
+  if (!user_id) return NextResponse.json({ error: "Missing user_id" }, { status: 400 });
 
   try {
-    /* ---------- 1. Determine date range ---------- */
-    const startDate = startParam
-      ? dayjs(startParam).startOf("day").toISOString()
-      : dayjs().subtract(6, "day").startOf("day").toISOString();
-    const endDate = endParam
-      ? dayjs(endParam).endOf("day").toISOString()
-      : dayjs().endOf("day").toISOString();
+    // 1. Normalize Date Range
+    const startDate = startParam ? dayjs(startParam).startOf("day") : dayjs().subtract(6, "day").startOf("day");
+    const endDate = endParam ? dayjs(endParam).endOf("day") : dayjs().endOf("day");
 
-    /* ---------- 2. Fetch food logs ---------- */
+    // 2. Fetch Logs (Querying against log_date primarily, created_at as fallback)
     const { data: foodLogs, error: foodError } = await supabase
       .from("food_logs")
       .select("*")
       .eq("user_id", user_id)
-      .gte("created_at", startDate)
-      .lte("created_at", endDate)
-      .order("created_at", { ascending: true });
+      .gte("log_date", startDate.format("YYYY-MM-DD"))
+      .lte("log_date", endDate.format("YYYY-MM-DD"));
 
     if (foodError) throw foodError;
 
-    /* ---------- 3. Fetch user progress/profile ---------- */
-    let progress: any = null;
-
-    // First try user_progress
-    const { data: p1, error: p1err } = await supabase
+    // 3. Fetch User Strategy
+    const { data: progress } = await supabase
       .from("user_progress")
       .select("*")
       .eq("user_id", user_id)
       .maybeSingle();
-    if (!p1err && p1) progress = p1;
 
-    // Fallback to profiles
-    const { data: p2, error: p2err } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("user_id", user_id)
-      .maybeSingle();
-    if (!p2err && p2) {
-      progress = { ...progress, ...p2 };
-    }
-
-    /* ---------- 4. Aggregate daily consumed calories ---------- */
+    // 4. Map existing data
     const dailyMap: Record<string, number> = {};
     let totalConsumed = 0;
 
-    (foodLogs || []).forEach((row) => {
+    foodLogs?.forEach((row) => {
       const cals = extractCaloriesFromRow(row);
       totalConsumed += cals;
-
-      const date = dayjs(row.created_at).format("YYYY-MM-DD");
-      dailyMap[date] = (dailyMap[date] || 0) + cals;
+      const dateKey = row.log_date || dayjs(row.created_at).format("YYYY-MM-DD");
+      dailyMap[dateKey] = (dailyMap[dateKey] || 0) + cals;
     });
 
-    /* ---------- 5. Compute burned calories ---------- */
-    let totalBurned = 0;
-    let burnedPerWorkout = 0;
-    const freq = progress?.workout_frequency || progress?.frequency || "never";
-    const perWorkout = Number(progress?.calories_per_workout ?? progress?.calories_per_session ?? 0);
-
-    if (freq === "daily" || freq === "everyday") {
-      burnedPerWorkout = perWorkout;
-      totalBurned = perWorkout * 7;
-    } else if (freq === "3_per_week" || freq === "3x") {
-      burnedPerWorkout = perWorkout;
-      totalBurned = perWorkout * 3;
-    }
-
-    /* ---------- 6. Construct dataset per day ---------- */
-    const startDay = dayjs(startDate);
-    const endDay = dayjs(endDate);
-    const daysDiff = endDay.diff(startDay, "day") + 1;
-
+    // 5. Build Continuous Timeline (Prevents "Unknown" or Gaps)
+    const daysDiff = endDate.diff(startDate, "day") + 1;
     const weeklyData = Array.from({ length: daysDiff }).map((_, i) => {
-      const dateObj = startDay.add(i, "day");
-      const dateKey = dateObj.format("YYYY-MM-DD");
-      const consumed = dailyMap[dateKey] || 0;
-
+      const currentDay = startDate.add(i, "day");
+      const dateKey = currentDay.format("YYYY-MM-DD");
+      
+      const freq = progress?.workout_frequency || "never";
+      const perWorkout = Number(progress?.calories_per_workout || 0);
+      
       let burned = 0;
-      if (freq === "daily" || freq === "everyday") burned = burnedPerWorkout;
-      else if (freq === "3_per_week" || freq === "3x") {
-        burned = [1, 3, 5].includes(dateObj.day()) ? burnedPerWorkout : 0;
-      }
+      if (freq === "daily") burned = perWorkout;
+      else if (freq === "3_per_week" && [1, 3, 5].includes(currentDay.day())) burned = perWorkout;
 
       return {
-        date: dateObj.format("MMM D"),
-        consumed,
-        burned,
+        date: dateKey, // Send ISO string to frontend
+        consumed: dailyMap[dateKey] || 0,
+        burned: burned,
       };
     });
 
-    /* ---------- 7. Use BMI from profile if exists ---------- */
-    const bmi = progress?.bmi ? Number(progress.bmi) : null;
-
+    // 6. Calculate Goal Progress Logic
     const goal = progress?.goal || "maintain";
-    const netCalories = totalConsumed - totalBurned;
+    const totalBurned = weeklyData.reduce((acc, curr) => acc + curr.burned, 0);
+    const net = totalConsumed - totalBurned;
+    
     let goalProgress = 50;
-
-    if (goal === "lose") {
-      goalProgress = Math.max(0, Math.min(100, Math.round(100 - (netCalories / 3500) * 100)));
-    } else if (goal === "gain") {
-      goalProgress = Math.max(0, Math.min(100, Math.round((netCalories / 3500) * 100)));
-    } else {
-      goalProgress = Math.max(0, Math.min(100, 50 - Math.round((netCalories / 3500) * 10)));
-    }
+    if (goal === "lose") goalProgress = Math.max(0, Math.min(100, 100 - (net / 3500) * 100));
+    else if (goal === "gain") goalProgress = Math.max(0, Math.min(100, (net / 3500) * 100));
 
     return NextResponse.json({
       totalConsumed,
       totalBurned,
-      bmi,
+      bmi: progress?.bmi || 0,
       goalProgress,
       weeklyData,
     });
   } catch (err: any) {
-    console.error("Dashboard fetch error:", err.message || err);
-    return NextResponse.json({ error: "Failed to fetch dashboard" }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

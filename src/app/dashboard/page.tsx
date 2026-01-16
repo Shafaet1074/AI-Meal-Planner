@@ -142,7 +142,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <Layout className="min-h-screen">
+    <Layout className="h-screen flex flex-col">
       {/* Sidebar (Tablet & Desktop) */}
       {!isMobile && (
         <Sider

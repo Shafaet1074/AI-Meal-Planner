@@ -1,228 +1,203 @@
 "use client";
-
 import { useState, useEffect } from "react";
-import { Card, Typography, DatePicker, Empty, message, Spin, Row, Col, Statistic, Progress } from "antd";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
+import { Card, Typography, DatePicker, Empty, message, Spin, Row, Col, Statistic, Progress, Tag } from "antd";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import dayjs from "dayjs";
 import axios from "axios";
 import { useSelector } from "react-redux";
-import { AppleOutlined, FireOutlined, ThunderboltOutlined, AimOutlined } from "@ant-design/icons";
+import { AppleOutlined, FireOutlined, ThunderboltOutlined, ArrowUpOutlined, CalendarOutlined } from "@ant-design/icons";
+import { createClient } from "@supabase/supabase-js";
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 
-interface DailyCalories {
-  date: string;
-  consumed: number;
-  burned: number;
-}
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export default function CaloriesDashboard() {
   const user = useSelector((state: any) => state.user);
-  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
-    dayjs().subtract(6, "day"),
-    dayjs(),
-  ]);
-  const [chartData, setChartData] = useState<DailyCalories[]>([]);
-  const [loadingChart, setLoadingChart] = useState(false);
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([dayjs().subtract(6, "day"), dayjs()]);
+  const [chartData, setChartData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<any>(null);
-  const [loadingSummary, setLoadingSummary] = useState(true);
+  const [profile, setProfile] = useState<any>(null);
 
-  /* ---------- Fetch summary (totalConsumed, totalBurned, bmi, goalProgress) ---------- */
-  const fetchSummary = async () => {
-    if (!user?.uid) return message.warning("Please log in first");
-    setLoadingSummary(true);
+
+ useEffect(() => {
+  // We define the function inside or outside, but call it here
+  const initializeDashboard = async () => {
+    // 1. Guard Clause: Don't even start if user isn't loaded yet
+    if (!user?.email) {
+      // Note: We usually don't show a warning on mount, 
+      // just wait for the user state to hydrate.
+      return;
+    }
+
     try {
-      const res = await axios.get(`/api/dashboard`, {
-        params: { user_id: user.uid },
-      });
-      setSummary(res.data);
-    } catch (err: any) {
-      console.error(err);
-      message.error("Failed to load summary");
+      setLoading(true);
+
+      // 2. Fetch Profile from Supabase
+      const { data: profileData, error } = await supabase
+        .from("profiles")
+        .select("bmi, goal, gender")
+        .eq("email", user.email)
+        .single();
+
+      if (error || !profileData) {
+        message.error("Please complete your profile first.");
+        return; 
+      }
+
+      // 3. Update State
+      setProfile(profileData);
+
+      // 4. (Optional) You can trigger other fetches here
+      // await fetchNutritionPlan(profileData.goal);
+
+    } catch (err) {
+      console.error("Dashboard Load Error:", err);
+      message.error("Failed to synchronize dashboard data.");
     } finally {
-      setLoadingSummary(false);
+      setLoading(false);
     }
   };
 
-  /* ---------- Fetch chart data for selected date range ---------- */
-  const fetchChartData = async (start: string, end: string) => {
+  initializeDashboard();
+
+  // Dependency array ensures this runs when the user object changes
+}, [user?.email]);
+    
+  const fetchDashboard = async () => {
     if (!user?.uid) return;
-
-    setLoadingChart(true);
+    setLoading(true);
     try {
+      const [start, end] = dateRange;
       const res = await axios.get(`/api/dashboard`, {
-        params: { user_id: user.uid, start, end },
+        params: { 
+          user_id: user.uid, 
+          start: start.format("YYYY-MM-DD"), 
+          end: end.format("YYYY-MM-DD") 
+        }
       });
-
-      if (res.data?.weeklyData && Array.isArray(res.data.weeklyData)) {
-        const formatted: DailyCalories[] = res.data.weeklyData.map((d: any) => ({
+      
+      setSummary(res.data);
+      
+      if (res.data?.weeklyData) {
+        const formatted = res.data.weeklyData.map((d: any) => ({
           ...d,
-          date: dayjs(d.date).format("MMM D"),
+          // ✅ Robust Parsing: Turn YYYY-MM-DD into "Jan 16"
+          displayDate: dayjs(d.date).format("MMM D"),
         }));
         setChartData(formatted);
-      } else {
-        setChartData([]);
-        message.warning("No chart data returned for the selected range");
       }
-    } catch (err: any) {
-      console.error(err);
-      message.error("Failed to load chart data");
-      setChartData([]);
+    } catch (err) {
+      message.error("Sync failed");
     } finally {
-      setLoadingChart(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (user?.uid) fetchSummary();
-  }, [user]);
+    if (user?.uid) fetchDashboard();
+  }, [user, dateRange]);
 
-  useEffect(() => {
-    if (dateRange && user?.uid) {
-      const [start, end] = dateRange;
-      fetchChartData(start.format("YYYY-MM-DD"), end.format("YYYY-MM-DD"));
-    }
-  }, [dateRange, user]);
-
-  if (loadingSummary)
-    return (
-      <div className="flex justify-center items-center min-h-[60vh]">
-        <Spin size="large" />
-      </div>
-    );
-
-  if (!summary) return null;
+  if (!summary && loading) return <div className="flex justify-center items-center h-screen"><Spin size="large" /></div>;
 
   return (
-    <div className="p-2 md:p-6">
-      <Title level={3}>Your Fitness Dashboard</Title>
+    <div className="space-y-8  min-h-screen">
+      
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+        <div>
+          <Title level={2} className="!m-0 tracking-tight text-gray-800">Health Intelligence</Title>
+          <Text type="secondary" className="text-xs uppercase tracking-widest font-black opacity-40">
+            <CalendarOutlined className="mr-1" /> Sync Status: Verified
+          </Text>
+        </div>
+        <div className="bg-white p-2 rounded-2xl shadow-sm border border-gray-100">
+           <RangePicker
+            value={dateRange}
+            variant="borderless"
+            allowClear={false}
+            onChange={(v) => v && setDateRange(v as any)}
+            className="font-medium"
+          />
+        </div>
+      </header>
 
-      {/* ---------- Summary Cards ---------- */}
-      <Row gutter={[16, 16]} className="mb-4">
-        <Col xs={24} sm={12} md={6}>
-          <Card bordered={false} className="shadow-sm">
-            <Statistic
-              title="Calories Consumed"
-              value={summary.totalConsumed || 0}
-              suffix="kcal"
-              prefix={<AppleOutlined className="text-green-600" />}
-              valueStyle={{ color: "#16a34a" }}
-            />
-          </Card>
+      <Row gutter={[24, 24]}>
+        <Col xs={24} lg={16}>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 h-full">
+             <MetricCard title="Intake" value={summary?.totalConsumed || 0} unit="kcal" icon={<AppleOutlined />} color="#10b981" />
+             <MetricCard title="Burned" value={summary?.totalBurned || 0} unit="kcal" icon={<FireOutlined />} color="#f59e0b" />
+             <MetricCard title="Body Index" value={profile?.bmi || 0} unit="BMI" icon={<ThunderboltOutlined />} color="#3b82f6" />
+          </div>
         </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card bordered={false} className="shadow-sm">
-            <Statistic
-              title="Calories Burned"
-              value={summary.totalBurned || 0}
-              suffix="kcal"
-              prefix={<FireOutlined className="text-orange-500" />}
-              valueStyle={{ color: "#f97316" }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card bordered={false} className="shadow-sm">
-            <Statistic
-              title="BMI"
-              value={summary.bmi || 0}
-              precision={1}
-              prefix={<ThunderboltOutlined className="text-blue-500" />}
-              valueStyle={{ color: "#3b82f6" }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card bordered={false} className="shadow-sm text-center">
-            <AimOutlined className="text-green-600 text-xl mb-2" />
-            <Text className="block mb-1 font-medium">Goal Progress</Text>
-            <Progress
-              percent={Math.round(summary.goalProgress || 0)}
-              strokeColor="#16a34a"
-              showInfo={true}
-              size="small"
-            />
+        <Col xs={24} lg={8}>
+          <Card className="rounded-[2.5rem] border-none shadow-xl h-full bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+            <div className="flex flex-col items-center justify-center h-full py-6">
+              <Progress
+                type="circle"
+                percent={Math.round(summary?.goalProgress || 0)}
+                strokeColor={{ '0%': '#10b981', '100%': '#34d399' }}
+                size={160}
+                strokeWidth={10}
+                format={(p) => <span className="text-black font-black text-3xl">{p}%</span>}
+              />
+              <Title level={4} className="!text-white !mt-6 !mb-0 font-bold tracking-tight">Success Rate</Title>
+              <Text className="text-gray-400 text-[10px] mt-1 uppercase tracking-[0.2em]">Goal Convergence</Text>
+            </div>
           </Card>
         </Col>
       </Row>
 
-      {/* ---------- Date Range Picker + Bar Chart ---------- */}
-      <Card className="shadow-sm mt-4">
-        <div style={{ marginBottom: 16 }}>
-          <Text strong>Select Date Range: </Text>
-          <RangePicker
-            value={dateRange}
-            onChange={(values) =>
-              setDateRange(values as [dayjs.Dayjs, dayjs.Dayjs])
-            }
-            format="YYYY-MM-DD"
-          />
-        </div>
-
-        <div
-          style={{
-            width: "100%",
-            height: 380,
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          {loadingChart ? (
-            <Spin tip="Loading chart data..." />
-          ) : chartData.length === 0 ? (
-            <Empty description="No data available for the selected range." />
-          ) : (
-            <ResponsiveContainer>
-              <BarChart
-                data={chartData}
-                margin={{ top: 20, right: 20, left: 0, bottom: 0 }}
-                barCategoryGap="20%"
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                <XAxis dataKey="date" tick={{ fontSize: 13, fill: "#6b7280" }} />
-                <YAxis tick={{ fontSize: 13, fill: "#6b7280" }} />
-                <Tooltip
-                  cursor={{ fill: "rgba(0,0,0,0.05)" }}
-                  contentStyle={{
-                    background: "#fff",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 10,
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-                    padding: "12px 16px",
-                  }}
-                  formatter={(value: number, name: string) => [`${value} kcal`, name]}
-                />
-                <Legend verticalAlign="top" height={36} />
-                <Bar
-                  dataKey="consumed"
-                  name="Calories Consumed"
-                  fill="#16a34a"
-                  barSize={40}
-                  radius={[8, 8, 0, 0]}
-                />
-                <Bar
-                  dataKey="burned"
-                  name="Calories Burned"
-                  fill="#f97316"
-                  barSize={40}
-                  radius={[8, 8, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
+      <Card 
+        className="rounded-[2.5rem] border-none shadow-2xl overflow-hidden p-2 sm:p-6"
+        title={<span className="font-bold flex items-center gap-2 text-lg"><ArrowUpOutlined className="text-green-500" /> Metabolic Trend</span>}
+      >
+        <div className="h-[400px] w-full mt-4">
+          <ResponsiveContainer>
+            <BarChart data={chartData} barGap={12}>
+              <defs>
+                <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.8}/><stop offset="100%" stopColor="#10b981" stopOpacity={0.05}/>
+                </linearGradient>
+                <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.8}/><stop offset="100%" stopColor="#f59e0b" stopOpacity={0.05}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+              <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 12 }} dy={10} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 12 }} />
+              <Tooltip 
+                cursor={{ fill: '#f9fafb' }}
+                contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}
+              />
+              <Bar dataKey="consumed" radius={[8, 8, 0, 0]} fill="url(#g1)" barSize={32} name="Consumed" />
+              <Bar dataKey="burned" radius={[8, 8, 0, 0]} fill="url(#g2)" barSize={32} name="Burned" />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </Card>
     </div>
+  );
+}
+
+function MetricCard({ title, value, unit, icon, color }: any) {
+  return (
+    <Card className="rounded-[2rem] border-none shadow-md hover:shadow-xl transition-all h-full group">
+      <div className="flex flex-col justify-between h-full">
+        <div className="p-4 rounded-2xl text-2xl w-fit" style={{ backgroundColor: color + '15', color }}>
+          {icon}
+        </div>
+        <div className="mt-8">
+          <Text type="secondary" className="text-[10px] uppercase font-black tracking-widest opacity-50 block mb-1">{title}</Text>
+          <div className="flex items-baseline gap-1">
+            <span className="text-3xl font-black text-gray-800">{value}</span>
+            <span className="text-gray-400 font-bold text-xs uppercase">{unit}</span>
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 }

@@ -1,22 +1,14 @@
 "use client";
 import { useState, useEffect } from "react";
 import {
-  Typography,
-  Card,
-  Select,
-  InputNumber,
-  Button,
-  message,
-  Progress,
-  Row,
-  Col,
-  Tooltip,
+  Typography, Card, Select, InputNumber, Button, message, 
+  Progress, Row, Col, Tooltip, Statistic, Space, Divider, Skeleton,
+  Tag
 } from "antd";
 import {
-  FireOutlined,
-  ThunderboltOutlined,
-  HeartOutlined,
-  RiseOutlined,
+  FireOutlined, ThunderboltOutlined, RiseOutlined,
+  CheckCircleOutlined, InfoCircleOutlined, AimOutlined,
+  RocketOutlined, SettingOutlined
 } from "@ant-design/icons";
 import { useSelector } from "react-redux";
 
@@ -30,9 +22,32 @@ export default function ProgressTracker() {
   const [goal, setGoal] = useState("maintain");
   const [progressData, setProgressData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(false);
 
+  // 1. Fetch Progress Logic
+  async function fetchProgress() {
+    if (!user?.uid) return;
+    try {
+      setFetching(true);
+      const res = await fetch(`/api/progress?user_id=${user.uid}`);
+      const data = await res.json();
+      if (res.ok && data.data) {
+        setProgressData(data.data);
+        // Sync local inputs with saved data
+        setWorkoutFrequency(data.data.workout_frequency || "never");
+        setCaloriesPerWorkout(data.data.calories_per_workout || 200);
+        setGoal(data.data.goal || "maintain");
+      }
+    } catch {
+      message.error("Failed to synchronize with cloud");
+    } finally {
+      setFetching(false);
+    }
+  }
+
+  // 2. Save Progress Logic
   async function saveProgress() {
-    if (!user?.uid) return message.warning("Please log in first");
+    if (!user?.uid) return message.warning("Authentication required");
 
     try {
       setLoading(true);
@@ -47,24 +62,13 @@ export default function ProgressTracker() {
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to save");
-      message.success("Progress settings saved ✅");
+      if (!res.ok) throw new Error("Update failed");
+      message.success("Fitness Blueprint Updated ✨");
       await fetchProgress();
     } catch (err) {
-      message.error("Failed to save progress");
+      message.error("Failed to update progress");
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function fetchProgress() {
-    if (!user?.uid) return;
-    try {
-      const res = await fetch(`/api/progress?user_id=${user.uid}`);
-      const data = await res.json();
-      if (res.ok) setProgressData(data.data);
-    } catch {
-      message.error("Failed to load progress data");
     }
   }
 
@@ -73,163 +77,197 @@ export default function ProgressTracker() {
   }, [user]);
 
   return (
-    <div className=" mt-10 space-y-8 ">
-      <Card
-        className=" border border-gray-200 rounded-2xl"
-        style={{
-          background:
-            "linear-gradient(135deg, #f9fafb 0%, #f0f7ff 50%, #e6f4ff 100%)",
-        }}
+    <div className=" space-y-8 min-h-screen bg-[#f8fafc]">
+      
+      {/* SECTION 1: THE STRATEGY CARD (Configuration) */}
+      <Card 
+        className="border-none  rounded-[2rem] overflow-hidden"
+        style={{ background: 'linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%)', marginBottom:20 }}
       >
-        <Title level={3} className="mb-4">
-          🏋️‍♀️ Fitness & Goal Settings
-        </Title>
-
-        <Paragraph type="secondary">
-          Set your workout habits, calorie burn estimate, and your personal goal
-          to help the AI measure your progress effectively.
-        </Paragraph>
-
-        <Row gutter={16} className="mt-4">
-          <Col xs={24} md={9}>
-            <Text strong>Workout Frequency</Text>
-            <Select
-              className="w-full mt-2"
-              value={workoutFrequency}
-              onChange={setWorkoutFrequency}
-            >
-              <Option value="daily">Daily</Option>
-              <Option value="3_per_week">3 Days / Week</Option>
-              <Option value="never">Never</Option>
-            </Select>
-          </Col>
-
-          <Col  xs={24} md={4}>
-           <div style={{display:"flex",flexDirection:'column'}}>
-             <Text strong>Calories Burned per Workout</Text>
-            <InputNumber
-              className="w-full mt-2"
-              // style={{marginTop:10}}
-              min={100}
-              max={2000}
-              value={caloriesPerWorkout}
-              onChange={(val) => setCaloriesPerWorkout(val || 0)}
-            />
-           </div>
-          </Col>
-
-          <Col xs={24} md={9}>
-            <Text strong>Goal</Text>
-            <Select className="w-full mt-2" value={goal} onChange={setGoal}>
-              <Option value="lose">Lose Weight</Option>
-              <Option value="gain">Gain Weight</Option>
-              <Option value="maintain">Maintain</Option>
-            </Select>
-          </Col>
-        </Row>
-
-        <Button
-          type="primary"
-          className="mt-6"
-          style={{marginTop:20}}
-          onClick={saveProgress}
-          loading={loading}
-        >
-          Save Progress
-        </Button>
-      </Card>
-
-      {progressData && (
-        <Card
-          className="rounded-2xl"
-          style={{
-            background:
-              "linear-gradient(135deg, #ffffff 0%, #f7faff 50%, #f0f8ff 100%)",
-              marginTop:20
-          }}
-        >
-          <Title level={4} className="mb-2">
-            📊 Weekly Summary
-          </Title>
-          <Paragraph type="secondary" className="mb-5">
-            Here’s your current calorie balance and how it aligns with your
-            fitness goal.
-          </Paragraph>
+        <div className="p-2 sm:p-6">
+          <header className="flex items-center gap-4 mb-8">
+            <div className="bg-blue-600 p-3 rounded-2xl text-white shadow-lg shadow-blue-200">
+              <SettingOutlined style={{ fontSize: '24px' }} />
+            </div>
+            <div>
+              <Title level={2} className="!m-0 tracking-tight">Fitness Blueprint</Title>
+              <Text type="secondary" className="text-sm">Calibrate your metabolism and primary health objectives</Text>
+            </div>
+          </header>
 
           <Row gutter={[24, 24]}>
-            <Col xs={24} md={8}>
-              <Card
-                bordered={false}
-                className="text-center bg-gradient-to-b from-blue-50 to-blue-100"
-              >
-                <FireOutlined style={{ fontSize: 28, color: "#fa8c16" }} />
-                <Title level={5}>Calories Consumed</Title>
-                <Text strong>{progressData.totalConsumed} kcal</Text>
-              </Card>
+            <Col xs={24} lg={8}>
+              <div className="bg-white/60 backdrop-blur-md p-5 rounded-3xl border border-blue-50 shadow-sm">
+                <Text strong className="text-blue-900/40 uppercase text-[10px] tracking-widest block mb-3 font-black">Activity Cadence</Text>
+                <Select 
+                  className="w-full text-lg" 
+                  size="large" 
+                  variant="borderless" 
+                  value={workoutFrequency} 
+                  onChange={setWorkoutFrequency}
+                >
+                  <Option value="daily">🔥 Daily Routine</Option>
+                  <Option value="3_per_week">⚡ 3 Days / Week</Option>
+                  <Option value="never">🧘 Sedentary</Option>
+                </Select>
+              </div>
             </Col>
 
-            <Col xs={24} md={8}>
-              <Card
-                bordered={false}
-                className="text-center bg-gradient-to-b from-green-50 to-green-100"
-              >
-                <ThunderboltOutlined style={{ fontSize: 28, color: "#52c41a" }} />
-                <Title level={5}>Calories Burned</Title>
-                <Text strong>{progressData.totalBurned} kcal</Text>
-              </Card>
+            <Col xs={24} lg={8}>
+              <div className="bg-white/60 backdrop-blur-md p-5 rounded-3xl border border-blue-50 shadow-sm">
+                <Text strong className="text-blue-900/40 uppercase text-[10px] tracking-widest block mb-3 font-black">Energy per Session</Text>
+                <div className="flex items-center gap-2">
+                   <InputNumber 
+                    className="w-full font-bold text-xl" 
+                    variant="borderless"
+                    min={100} 
+                    max={2000} 
+                    value={caloriesPerWorkout} 
+                    onChange={(val) => setCaloriesPerWorkout(val || 0)} 
+                  />
+                  <Text type="secondary">kcal</Text>
+                </div>
+              </div>
             </Col>
 
-            <Col xs={24} md={8}>
-              <Card
-                bordered={false}
-                className="text-center bg-gradient-to-b from-orange-50 to-orange-100"
-              >
-                <RiseOutlined style={{ fontSize: 28, color: "#faad14" }} />
-                <Title level={5}>Net Calories</Title>
-                <Text strong>{progressData.netCalories} kcal</Text>
-              </Card>
+            <Col xs={24} lg={8}>
+              <div className="bg-white/60 backdrop-blur-md p-5 rounded-3xl border border-blue-50 shadow-sm">
+                <Text strong className="text-blue-900/40 uppercase text-[10px] tracking-widest block mb-3 font-black">Success Metric</Text>
+                <Select className="w-full text-lg" size="large" variant="borderless" value={goal} onChange={setGoal}>
+                  <Option value="lose">📉 Weight Loss</Option>
+                  <Option value="gain">📈 Muscle Gain</Option>
+                  <Option value="maintain">⚖️ Maintenance</Option>
+                </Select>
+              </div>
             </Col>
           </Row>
 
-          <div className="mt-8 text-center">
-            <Tooltip title="A negative net calorie means you're burning more than you eat — great for weight loss!">
-            <Progress
-              percent={Math.min(
-                Math.floor(Math.abs(progressData.netCalories / 3500) * 100),
-                100
-              )}
-              status="active"
-              strokeColor={
-                progressData.netCalories < 0
-                  ? "#52c41a"
-                  : progressData.netCalories > 0
-                  ? "#faad14"
-                  : "#1890ff"
-              }
-            />
+          <Button 
+            type="primary" 
+            style={{marginTop:20}}
+            size="large"
+            icon={<RocketOutlined />}
+            className="mt-8 rounded-2xl h-14 px-12 bg-blue-600 hover:scale-105 transition-all border-none shadow-xl shadow-blue-200 font-bold"
+            onClick={saveProgress}
+            loading={loading}
+          >
+            Update Blueprint
+          </Button>
+        </div>
+      </Card>
 
-            </Tooltip>
-
-            <Text
-              type={
-                progressData.netCalories < 0
-                  ? "success"
-                  : progressData.netCalories > 0
-                  ? "warning"
-                  : "secondary"
-              }
-              className="block mt-3 text-lg"
-            >
-              {progressData.status}
-            </Text>
-
-            <Paragraph className="mt-4 text-gray-600">
-              💡 {progressData.tip ||
-                "Stay consistent! Your progress compounds every week."}
-            </Paragraph>
+      {/* SECTION 2: THE OUTCOME (Analysis) */}
+      {fetching ? (
+        <Card className="rounded-[2rem] border-none shadow-sm p-10"><Skeleton active /></Card>
+      ) : progressData && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-6 duration-1000">
+          <div className="flex items-center justify-between px-2">
+            <Title level={4} className="!m-0 flex items-center gap-2">
+              <CheckCircleOutlined className="text-green-500" /> Bio-Feedback Analysis
+            </Title>
+            <Tag color="blue" className="rounded-full border-none px-4">Weekly Cycle</Tag>
           </div>
-        </Card>
+
+          <Row gutter={[24, 24]}>
+            <Col xs={24} md={16}>
+              <Card className="rounded-[2rem] border-none shadow-lg h-full p-4 sm:p-8">
+                <Row gutter={24} align="middle">
+                  <Col xs={24} sm={12}>
+                    <Statistic 
+                      title={<span className="text-gray-400 font-bold uppercase text-xs tracking-widest">Net Caloric Balance</span>}
+                      value={progressData.netCalories} 
+                      suffix="kcal"
+                      valueStyle={{ 
+                        color: progressData.netCalories <= 0 ? '#10b981' : '#f59e0b', 
+                        fontSize: '3rem', 
+                        fontWeight: '900' 
+                      }}
+                    />
+                    <div className="mt-6 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                      <Space align="start">
+                        <InfoCircleOutlined className="text-blue-500 mt-1" />
+                        <div>
+                           <Text strong className="block text-sm">Metabolic Status</Text>
+                           <Text type="secondary" className="text-xs">{progressData.status}</Text>
+                        </div>
+                      </Space>
+                    </div>
+                  </Col>
+                  <Col xs={24} sm={12} className="text-center pt-8 sm:pt-0">
+                    <Tooltip title="This progress represents your fat-loss tissue change based on a 3500kcal per 1lb deficit model.">
+                      <Progress
+                        type="circle"
+                        percent={Math.min(Math.floor(Math.abs(progressData.netCalories / 3500) * 100), 100)}
+                        strokeColor={progressData.netCalories <= 0 ? '#10b981' : '#f59e0b'}
+                        strokeWidth={12}
+                        size={200}
+                        format={() => (
+                          <div className="flex flex-col">
+                            <span className="text-xs font-bold text-gray-400 uppercase">Tissue</span>
+                            <span className="text-xl font-black tracking-tighter">CHANGE</span>
+                          </div>
+                        )}
+                      />
+                    </Tooltip>
+                  </Col>
+                </Row>
+              </Card>
+            </Col>
+
+            <Col xs={24} md={8}>
+              <div className="flex flex-col gap-4 h-full">
+                <MetricCard 
+                  icon={<FireOutlined />} 
+                  label="Total Intake" 
+                  value={progressData.totalConsumed} 
+                  color="#3b82f6" 
+                  desc="Total energy from logged meals"
+                />
+                <MetricCard 
+                  icon={<ThunderboltOutlined />} 
+                  label="Energy Expenditure" 
+                  value={progressData.totalBurned} 
+                  color="#10b981" 
+                  desc="Base metabolic rate + workouts"
+                />
+              </div>
+            </Col>
+          </Row>
+
+          {/* AI ADVICE FOOTER */}
+          <Card className="rounded-[2rem] border-none shadow-md bg-gradient-to-r from-blue-700 to-indigo-800 text-white p-2">
+            <div className="flex items-center gap-6 p-4">
+              <div className="bg-white/20 backdrop-blur-lg p-4 rounded-3xl text-3xl shadow-inner">💡</div>
+              <div>
+                <Title level={5} className="!text-white !m-0 !mb-1 tracking-tight">AI Biological Optimization</Title>
+                <Text className="text-blue-50 opacity-90 leading-relaxed italic">
+                  "{progressData.tip || "Your consistency is your superpower. Based on current trends, we suggest maintaining this balance for 14 days to see measurable results."}"
+                </Text>
+              </div>
+            </div>
+          </Card>
+        </div>
       )}
     </div>
+  );
+}
+
+// 📦 Reusable Professional Metric Component
+function MetricCard({ icon, label, value, color, desc }: any) {
+  return (
+    <Card className="rounded-3xl border-none shadow-sm hover:shadow-xl transition-all flex-1 group">
+      <div className="flex flex-col justify-between h-full">
+        <div className="flex items-center justify-between mb-4">
+          <div className="p-3 rounded-2xl group-hover:scale-110 transition-transform" style={{ backgroundColor: color + '15', color }}>
+            {icon}
+          </div>
+          <Text strong className="text-xl">{value} <small className="text-[10px] text-gray-400">kcal</small></Text>
+        </div>
+        <div>
+          <Text type="secondary" className="text-[10px] uppercase font-bold tracking-widest block opacity-60">{label}</Text>
+          <Text className="text-[11px] text-gray-400 leading-none">{desc}</Text>
+        </div>
+      </div>
+    </Card>
   );
 }
