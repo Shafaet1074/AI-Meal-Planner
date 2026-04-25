@@ -1,5 +1,48 @@
-export const dynamic = "force-dynamic"; 
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
+import { GoogleGenerativeAI, SchemaType, Schema } from "@google/generative-ai";
+
+// Define the schema with 'as const' to ensure nested properties match SDK requirements
+const schema: Schema = {
+  description: "Daily food plan",
+  type: SchemaType.OBJECT,
+  properties: {
+    breakfast: {
+      type: SchemaType.OBJECT,
+      properties: {
+        items: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+        calories: { type: SchemaType.STRING },
+      },
+      required: ["items", "calories"],
+    },
+    lunch: {
+      type: SchemaType.OBJECT,
+      properties: {
+        items: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+        calories: { type: SchemaType.STRING },
+      },
+      required: ["items", "calories"],
+    },
+    snacks: {
+      type: SchemaType.OBJECT,
+      properties: {
+        items: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+        calories: { type: SchemaType.STRING },
+      },
+      required: ["items", "calories"],
+    },
+    dinner: {
+      type: SchemaType.OBJECT,
+      properties: {
+        items: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+        calories: { type: SchemaType.STRING },
+      },
+      required: ["items", "calories"],
+    },
+    nutrition_summary: { type: SchemaType.STRING },
+  },
+  required: ["breakfast", "lunch", "snacks", "dinner", "nutrition_summary"],
+} as const;
 
 export async function POST(req: Request) {
   try {
@@ -9,86 +52,45 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing profile info" }, { status: 400 });
     }
 
-    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-    if (!OPENROUTER_API_KEY) {
-      return NextResponse.json(
-        { error: "OpenRouter API key not configured" },
-        { status: 500 }
-      );
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: "Gemini API key not configured" }, { status: 500 });
     }
 
-    const prompt = `
-You are a certified nutritionist and chef specializing in Bangladeshi cuisine.
-Generate a healthy, culturally relevant daily food plan based on:
-
-- BMI: ${bmi}
-- Goal: ${goal}
-- Gender: ${gender}
-
-Return ONLY valid JSON in this format:
-{
-  "breakfast": { "items": ["Item 1", "Item 2"], "calories": "XXX kcal" },
-  "lunch": { "items": ["Item 1", "Item 2"], "calories": "XXX kcal" },
-  "snacks": { "items": ["Item 1", "Item 2"], "calories": "XXX kcal" },
-  "dinner": { "items": ["Item 1", "Item 2"], "calories": "XXX kcal" },
-  "nutrition_summary": "Short daily nutrition summary"
-}`;
-
-    console.log("🤖 Sending prompt to OpenRouter...");
-
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
+    // Initialize the SDK
+    const genAI = new GoogleGenerativeAI(apiKey);
+    
+    // Using the stable Gemini 3 Flash model
+    const model = genAI.getGenerativeModel({
+      model: "gemini-3-flash",
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: schema,
       },
-      body: JSON.stringify({
-        model: "deepseek/deepseek-chat-v3.1:free",
-        messages: [
-          {
-            role: "system",
-            content: "You are a professional dietitian. Respond ONLY with valid JSON.",
-          },
-          { role: "user", content: prompt },
-        ],
-        max_tokens: 1500,
-        temperature: 0.6,
-      }),
     });
 
-    console.log("🌐 OpenRouter response status:", response.status);
+    const prompt = `
+      You are a certified nutritionist and chef specializing in Bangladeshi cuisine.
+      Generate a healthy, culturally relevant daily food plan (using local ingredients like 
+      Lal Shak, Rui fish, Daal, etc.) for a user with:
+      - BMI: ${bmi}
+      - Goal: ${goal}
+      - Gender: ${gender}
+    `;
 
-    const data = await response.json();
-    console.log("🧩 OpenRouter raw data:", data);
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
 
-    const content = data?.choices?.[0]?.message?.content;
+    // With responseSchema, the output is guaranteed to follow your object structure
+    const plan = JSON.parse(text);
 
-    if (!content) {
-      console.error("⚠️ No message content from AI");
-      return NextResponse.json({ error: "No response from AI" }, { status: 500 });
-    }
-
-    // 🧠 Try extracting JSON safely
-    const match = content.match(/\{[\s\S]*\}/);
-    if (!match) {
-      console.error("⚠️ AI response missing JSON:", content);
-      return NextResponse.json({ error: "Invalid AI JSON format" }, { status: 500 });
-    }
-
-    let plan;
-    try {
-      plan = JSON.parse(match[0]);
-    } catch (parseErr) {
-      console.error("💥 JSON Parse Error:", parseErr);
-      return NextResponse.json({ error: "Failed to parse AI response" }, { status: 500 });
-    }
-
-    console.log("✅ Parsed AI Plan:", plan);
     return NextResponse.json(plan);
+    
   } catch (err) {
-    console.error("💥 AI meal plan error:", err);
+    console.error("💥 Gemini API error:", err);
     return NextResponse.json(
-      { error: "Failed to generate plan", details: (err as Error).message },
+      { error: "Failed to generate plan", details: (err as any).message },
       { status: 500 }
     );
   }

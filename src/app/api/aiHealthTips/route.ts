@@ -1,5 +1,15 @@
-export const dynamic = "force-dynamic"; 
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
+import { GoogleGenerativeAI, SchemaType, Schema } from "@google/generative-ai";
+
+// Define the schema with 'as const' to satisfy TypeScript's strict type checking
+const schema: Schema = {
+  description: "A list of 4 motivational health tips",
+  type: SchemaType.ARRAY,
+  items: {
+    type: SchemaType.STRING,
+  },
+} as const;
 
 export async function POST(req: Request) {
   try {
@@ -9,62 +19,48 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-    if (!OPENROUTER_API_KEY) {
-      return NextResponse.json({ error: "API key missing" }, { status: 500 });
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: "Gemini API key missing" }, { status: 500 });
     }
 
-    const prompt = `
-    You are a professional nutritionist. Based on the following profile:
-    - BMI: ${bmi}
-    - Goal: ${goal}
-    - Gender: ${gender}
-
-    Generate 4 short, motivational AI health tips.
-    Keep them simple, positive, and human-like.
-    Example: "💧 Drink at least 2.5L of water daily — hydration boosts metabolism."
-    Return only a valid JSON array of strings, nothing else.
-    `;
-
-    console.log("🧠 Sending request to OpenRouter...");
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
+    const genAI = new GoogleGenerativeAI(apiKey);
+    
+    // Initializing the model
+    const model = genAI.getGenerativeModel({
+      model: "gemini-3-flash", 
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: schema,
       },
-      body: JSON.stringify({
-        model: "deepseek/deepseek-chat-v3.1:free",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.6,
-        max_tokens: 300,
-      }),
     });
 
-    console.log("🌐 API status:", response.status);
+    const prompt = `
+      You are a professional nutritionist. Generate 4 short, motivational AI health tips 
+      specifically for someone with:
+      - BMI: ${bmi}
+      - Goal: ${goal}
+      - Gender: ${gender}
 
-    const data = await response.json();
-    const raw = data?.choices?.[0]?.message?.content || "";
+      Keep tips simple, positive, and human-like. 
+      Use local Bangladeshi context where relevant (e.g., seasonal fruits like mango/jackfruit, 
+      or habits like walking in the local park or rooftop).
+    `;
 
-    const match = raw.match(/\[[\s\S]*\]/);
-    if (!match) {
-      console.error("⚠️ No valid JSON array found:", raw);
-      return NextResponse.json({ aiTips: [] });
-    }
+    console.log("🧠 Generating tips with Gemini 3...");
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    
+    // The SDK returns the text as a JSON string because of the responseSchema configuration
+    const aiTips = JSON.parse(response.text());
 
-    let aiTips = [];
-    try {
-      aiTips = JSON.parse(match[0]);
-    } catch (e) {
-      console.error("💥 JSON parse error:", e, "Raw content:", raw);
-    }
-
-    console.log("✅ Parsed AI Tips:", aiTips);
+    console.log("✅ Successfully generated tips.");
     return NextResponse.json({ aiTips });
-  } catch (err) {
-    console.error("💥 AI Tips Error:", err);
+
+  } catch (err: any) {
+    console.error("💥 Gemini API Error:", err.message);
     return NextResponse.json(
-      { error: "Failed to generate AI health tips" },
+      { error: "Failed to generate AI health tips", details: err.message },
       { status: 500 }
     );
   }
