@@ -1,10 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   reactStrictMode: true,
-  output: "standalone", // use standalone build, not static export
+  // The 'eslint' ignore block has been removed
 };
 
-module.exports = nextConfig;
+export default nextConfig;

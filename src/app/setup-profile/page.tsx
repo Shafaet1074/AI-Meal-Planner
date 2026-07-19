@@ -800,10 +800,11 @@ export default function SetupProfilePage() {
                   }
                   goNext();
                 }}
-                className="px-6 py-3 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700"
+                style={{ color: "white" }}
+                className="px-6 py-3 rounded-lg bg-green-600  font-semibold hover:bg-green-700"
                 type="button"
               >
-                Next
+              Next
               </button>
             ) : (
               <button
