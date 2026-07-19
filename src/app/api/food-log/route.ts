@@ -1,81 +1,75 @@
-export const dynamic = "force-dynamic"; 
+export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { GoogleGenerativeAI, SchemaType, Schema } from "@google/generative-ai";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+// 🧠 Define Gemini output schema to guarantee clean JSON
+const schema: Schema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    approx_calories: { type: SchemaType.NUMBER },
+    advice: { type: SchemaType.STRING },
+  },
+  required: ["approx_calories", "advice"],
+};
+
 export async function POST(req: Request) {
   try {
     const { user_id, meal_type, food_items, mood } = await req.json();
-    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-    // 🧠 AI Prompt
-    const aiPrompt = `
-You are a certified nutritionist.
-Estimate the approximate total calories of the following meal and give ONE short nutrition tip.
-Return ONLY valid JSON in this exact format:
-{
-  "approx_calories": number,
-  "advice": "string"
-}
-Meal type: ${meal_type}
-Foods: ${Array.isArray(food_items) ? food_items.join(", ") : food_items}
-Mood: ${mood || "N/A"}
-`;
-
-    // 🚀 AI Request
-    const aiRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "deepseek/deepseek-chat-v3.1:free",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are an expert dietitian. Respond ONLY with valid JSON — no extra text, markdown, or symbols.",
-          },
-          { role: "user", content: aiPrompt },
-        ],
-        temperature: 0.3,
-      }),
-    });
-
-    const aiData = await aiRes.json();
-    let rawContent = aiData?.choices?.[0]?.message?.content || "";
-
-    // Clean JSON
-    const firstBrace = rawContent.indexOf("{");
-    const lastBrace = rawContent.lastIndexOf("}");
-    const cleaned =
-      firstBrace !== -1 && lastBrace !== -1
-        ? rawContent.slice(firstBrace, lastBrace + 1)
-        : rawContent;
-
-    let aiOutput: { approx_calories?: number; advice?: string } = {};
-    try {
-      aiOutput = JSON.parse(cleaned);
-    } catch (err) {
-      console.error("⚠️ AI response parse error. Raw:", rawContent);
+    if (!user_id || !food_items) {
       return NextResponse.json(
-        { error: "AI returned invalid JSON format." },
-        { status: 500 }
+        { error: "Missing required fields: user_id and food_items." },
+        { status: 400 }
       );
     }
 
-    const { approx_calories, advice } = aiOutput;
-    if (!approx_calories || isNaN(approx_calories)) {
-      return NextResponse.json(
-        { error: "AI failed to estimate calories accurately." },
-        { status: 500 }
-      );
+    const foodText = Array.isArray(food_items)
+      ? food_items.join(", ")
+      : String(food_items);
+
+    let aiOutput = { approx_calories: 0, advice: "Unable to analyze meal accurately." };
+
+    // 🚀 Call Gemini
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) throw new Error("GEMINI_API_KEY is not configured.");
+
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({
+        model: "gemini-3.5-flash",
+        systemInstruction: "You are an expert dietitian. Respond ONLY with valid JSON — no extra text, markdown, or symbols.",
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: schema,
+          temperature: 0.3,
+        },
+      });
+
+      const prompt = `Estimate the approximate total calories of the following meal and give ONE short nutrition tip.
+        Meal type: ${meal_type}
+        Foods: ${foodText}
+        Mood: ${mood || "N/A"}`;
+
+      const result = await model.generateContent(prompt);
+      const responseText = result.response.text();
+      
+      if (responseText) {
+        aiOutput = JSON.parse(responseText);
+      }
+    } catch (aiError: any) {
+      console.error("⚠️ Gemini API Error:", aiError.message);
+      // We don't throw here so the meal still saves even if AI fails
+    }
+
+    if (!aiOutput.approx_calories || isNaN(aiOutput.approx_calories)) {
+      aiOutput.approx_calories = 0; // Fallback to 0 if parsing completely fails
     }
 
     // 💾 Save to Supabase
@@ -84,9 +78,9 @@ Mood: ${mood || "N/A"}
         user_id,
         meal_type,
         food_items,
-        calories: approx_calories,
+        calories: aiOutput.approx_calories,
         mood,
-        ai_advice: advice,
+        ai_advice: aiOutput.advice,
         log_date: new Date().toISOString().slice(0, 10),
       },
     ]);
