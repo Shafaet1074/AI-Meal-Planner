@@ -7,16 +7,16 @@ export default function Footer() {
         <p>© 2025 SmartMealAI. All rights reserved.</p>
         <div className="space-x-4 mt-4 md:mt-0">
           <a
-            href="https://github.com/yourusername"
+            href="https://github.com/Shafaet1074"
             target="_blank"
             rel="noreferrer"
             className="hover:text-green-500"
           >
             GitHub
           </a>
-          <a href="mailto:youremail@example.com" className="hover:text-green-500">
+          {/* <a href="mailto:hossainshafaet05@gmail.com" className="hover:text-green-500">
             Contact
-          </a>
+          </a> */}
         </div>
       </div>
     </footer>
