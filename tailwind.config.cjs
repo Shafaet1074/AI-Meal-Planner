@@ -1,12 +1,13 @@
-/** @type {import('tailwindcss').Config} */
+// tailwind.config.js
 module.exports = {
+  darkMode: "class", // Add this line
   content: [
-    "./src/app/**/*.{js,ts,jsx,tsx}",       // App Router pages
-    "./src/pages/**/*.{js,ts,jsx,tsx}",     // Pages Router (if used)
-    "./src/components/**/*.{js,ts,jsx,tsx}",// Components
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {},
   },
   plugins: [],
-};
+}

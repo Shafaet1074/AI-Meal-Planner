@@ -6,6 +6,7 @@ import Footer from "./components/Footer";
 import Hero from "./components/Hero";
 import HowItWorks from "./components/HowItWorks";
 import Navbar from "./components/Navbar";
+import Pricing from "./components/Pricing/Pricning";
 
 
 
@@ -20,6 +21,7 @@ export default function LandingPage() {
       <Features />
       <HowItWorks />
       {/* <About /> */}
+      <Pricing />
       <Footer />
     </div>
   );
