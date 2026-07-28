@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { Activity, ArrowRight, Instagram, Twitter, Youtube } from "lucide-react";
+import { Activity, ArrowRight} from "lucide-react";
 
 export default function Footer() {
   const currentYear = new Date().getFullYear(); // 2026
