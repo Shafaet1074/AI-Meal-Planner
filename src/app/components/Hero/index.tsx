@@ -6,7 +6,7 @@ import { ArrowRight, Flame, Target, Zap, Bot, Activity } from "lucide-react";
 export default function Hero() {
   const [email, setEmail] = useState("");
 
-  const handleLeadCapture = (e) => {
+  const handleLeadCapture = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     console.log("Member signed up with:", email);
   };

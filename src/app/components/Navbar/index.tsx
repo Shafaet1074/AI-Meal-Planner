@@ -54,9 +54,9 @@ export default function Navbar() {
               </button>
             )}
 
-            <a href="/login" className="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors">
+            {/* <a href="/login" className="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors">
               Sign In
-            </a>
+            </a> */}
             <a 
               href="/register" 
               className="inline-flex items-center justify-center px-5 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all"
@@ -101,9 +101,9 @@ export default function Navbar() {
             </a>
             
             <div className="mt-6 pt-6 border-t border-gray-100 dark:border-slate-800 flex flex-col gap-3">
-              <a href="/login" className="block w-full text-center px-4 py-2.5 text-base font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-slate-900 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
+              {/* <a href="/login" className="block w-full text-center px-4 py-2.5 text-base font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-slate-900 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
                 Sign In
-              </a>
+              </a> */}
               <a href="/register" className="block w-full text-center px-4 py-2.5 text-base font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 shadow-sm transition-colors">
                 Get Started Free
               </a>
