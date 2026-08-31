@@ -5,7 +5,7 @@
 @variant dark (&:where(.dark, .dark *));
 
 input, button, select, optgroup, textarea {
-  margin: 10;
+  /* margin: 10; */
   color: inherit;
   font-size: inherit;
   font-family: inherit;

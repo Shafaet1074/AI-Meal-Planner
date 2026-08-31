@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
-import { message } from "antd"; // Kept only for toast notifications
+import { message } from "antd";
 import { createClient } from "@supabase/supabase-js";
 import {
   RefreshCw,
@@ -28,106 +28,95 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export default function AIFoodPlan() {
   const user = useSelector((state: any) => state.user);
-  const [loading, setLoading] = useState(true);
-  const [plan, setPlan] = useState<any>(null);
+  
+  // State management split for Profile vs AI Generation
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
   const [profile, setProfile] = useState<any>(null);
+  const [plan, setPlan] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("breakfast");
-
-  // 🌿 AI Tips States
   const [aiTips, setAiTips] = useState<string[]>([]);
   const [loadingTips, setLoadingTips] = useState<boolean>(false);
 
-  const fetchData = async () => {
-    if (!user?.email) {
-      message.warning("Please log in to view your AI meal plan.");
-      setLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const { data: profileData, error } = await supabase
-        .from("profiles")
-        .select("bmi, goal, gender")
-        .eq("email", user.email)
-        .single();
-
-      if (error || !profileData) {
-        message.error("Profile not found for this user.");
-        setLoading(false);
+  // 1. Fetch Profile Immediately on Mount
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user?.email) {
+        setProfileLoading(false);
         return;
       }
-
-      setProfile(profileData);
-
-      const res = await fetch("/api/aiMealPlan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(profileData),
-      });
-
-      const result = await res.json();
-
-      if (res.ok && !result.error) {
-        setPlan(result);
-        message.success("Meal Plan Loaded Successfully!");
-      } else {
-        message.error(result.error || "Failed to load meal plan");
-      }
-    } catch (err) {
-      console.error(err);
-      message.error("Error loading meal plan");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 🧠 Fetch AI Health Tips
-  useEffect(() => {
-    const fetchAiHealthTips = async () => {
-      if (!profile) return;
       try {
-        setLoadingTips(true);
-        const res = await fetch("/api/aiHealthTips", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            bmi: profile.bmi,
-            goal: profile.goal,
-            gender: profile.gender,
-          }),
-        });
+        const { data: profileData, error } = await supabase
+          .from("profiles")
+          .select("bmi, goal, gender")
+          .eq("email", user.email)
+          .single();
 
-        const data = await res.json();
-        setAiTips(data.aiTips || []);
+        if (!error && profileData) {
+          setProfile(profileData);
+        }
       } catch (err) {
-        console.error("💥 Error fetching AI health tips:", err);
+        console.error("Error fetching profile:", err);
       } finally {
-        setLoadingTips(false);
+        setProfileLoading(false);
       }
     };
 
-    fetchAiHealthTips();
-  }, [profile]);
-
-  useEffect(() => {
-    if (user) fetchData();
+    fetchProfile();
   }, [user]);
 
-  // 🧠 Helper
+  // 2. Trigger AI Generation on Button Click
+  const generateAIContent = async () => {
+    if (!profile) {
+      message.error("Profile data is missing. Please update your profile.");
+      return;
+    }
+
+    setGenerating(true);
+    setLoadingTips(true);
+    
+    try {
+      // Fetch Meal Plan
+      const planRes = await fetch("/api/aiMealPlan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(profile),
+      });
+      
+      const planResult = await planRes.json();
+      if (planRes.ok && !planResult.error) {
+        setPlan(planResult);
+        message.success("Your personalized plan is ready!");
+      } else {
+        message.error("Failed to load meal plan.");
+      }
+
+      // Fetch AI Tips
+      const tipsRes = await fetch("/api/aiHealthTips", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(profile),
+      });
+      
+      const tipsData = await tipsRes.json();
+      if (tipsData.aiTips) {
+        setAiTips(tipsData.aiTips);
+      }
+    } catch (err) {
+      console.error(err);
+      message.error("Something went wrong while generating content.");
+    } finally {
+      setGenerating(false);
+      setLoadingTips(false);
+    }
+  };
+
   const getGoalMessage = (bmi: number, goal: string) => {
-    if (goal === "lose")
-      return `Focus on nutrient-dense meals and stay consistent. You're closer than you think! 💪`;
-    if (goal === "maintain")
-      return `Consistency is your superpower 🧘‍♂️ — keep balanced meals and hydration steady.`;
-    if (goal === "gain")
-      return `Fuel your progress 🍗 — lean proteins and carbs will build your strength steadily.`;
-
-    if (bmi < 18.5)
-      return `Include more calorie-rich, wholesome foods in your diet 🍠.`;
-    if (bmi >= 25)
-      return `Stay mindful of portions 🥗 — small adjustments can make big changes.`;
-
+    if (goal === "lose") return `Focus on nutrient-dense meals and stay consistent. You're closer than you think! 💪`;
+    if (goal === "maintain") return `Consistency is your superpower 🧘‍♂️ — keep balanced meals and hydration steady.`;
+    if (goal === "gain") return `Fuel your progress 🍗 — lean proteins and carbs will build your strength steadily.`;
+    if (bmi < 18.5) return `Include more calorie-rich, wholesome foods in your diet 🍠.`;
+    if (bmi >= 25) return `Stay mindful of portions 🥗 — small adjustments can make big changes.`;
     return `Follow this meal plan for your health goals 🌱.`;
   };
 
@@ -145,39 +134,17 @@ export default function AIFoodPlan() {
     { id: "dinner", label: "Dinner", icon: <Moon className="w-4 h-4" /> },
   ];
 
-  if (loading) {
+  if (profileLoading) {
     return (
       <div className="flex flex-col justify-center items-center h-[60vh] gap-4 text-center px-4">
         <Loader2 className="w-10 h-10 text-emerald-500 animate-spin" />
-        <p className="text-slate-500 dark:text-slate-400 font-medium">
-          AI is analyzing your nutrition data... 🤖
-        </p>
-      </div>
-    );
-  }
-
-  if (!plan) {
-    return (
-      <div className="flex flex-col justify-center items-center h-[50vh] gap-6 px-4 text-center">
-        <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-full">
-          <Utensils className="w-8 h-8 text-slate-400 dark:text-slate-500" />
-        </div>
-        <p className="text-slate-500 dark:text-slate-400 text-lg max-w-md">
-          No meal plan available yet. Click below to generate your first AI personalized plan.
-        </p>
-        <button
-          onClick={fetchData}
-          className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-500 transition-colors shadow-lg shadow-emerald-600/20"
-        >
-          <RefreshCw className="w-5 h-5" />
-          Generate Meal Plan
-        </button>
+        <p className="text-slate-500 dark:text-slate-400 font-medium">Loading your dashboard...</p>
       </div>
     );
   }
 
   return (
-    <div className=" mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
+    <div className="mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
       
       {/* Header */}
       <div className="text-center sm:text-left space-y-2">
@@ -185,11 +152,11 @@ export default function AIFoodPlan() {
           Hello, {user?.displayName || "Health Enthusiast"} 👋
         </h1>
         <p className="text-slate-500 dark:text-slate-400 text-lg">
-          Here is your AI-personalized meal plan based on your exact macros.
+          Your personalized nutrition dashboard. Let's hit those goals!
         </p>
       </div>
 
-      {/* Profile Summary */}
+      {/* Profile Summary - Shown Immediately */}
       {profile && (
         <div className="bg-white dark:bg-slate-900 shadow-sm rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full mb-4">
@@ -203,70 +170,104 @@ export default function AIFoodPlan() {
         </div>
       )}
 
-      {/* Tabs & Plan Content */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-        {/* Tab Switcher */}
-        <div className="flex overflow-x-auto border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
-          {mealTabs.map((tab) => (
+      {/* Dynamic Meal Plan Section */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden min-h-[300px]">
+        {!plan ? (
+          /* Empty State / Generation Trigger */
+          <div className="flex flex-col justify-center items-center h-full py-16 px-4 text-center">
+            <div className="bg-slate-100 dark:bg-slate-800 p-5 rounded-full mb-6">
+              <Zap className="w-10 h-10 text-emerald-500" />
+            </div>
+            <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+              Ready for your AI Meal Plan?
+            </h3>
+            <p className="text-slate-500 dark:text-slate-400 text-lg max-w-md mb-8">
+              We'll analyze your BMI and goals to create a culturally relevant, macro-balanced daily menu.
+            </p>
             <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 flex items-center justify-center gap-2 py-4 px-4 text-sm font-bold transition-all border-b-2 whitespace-nowrap ${
-                activeTab === tab.id
-                  ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-900"
-                  : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-              }`}
+              onClick={generateAIContent}
+              disabled={generating}
+              className="flex items-center gap-2 px-8 py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-500 transition-colors shadow-lg shadow-emerald-600/20 disabled:opacity-70"
             >
-              {tab.icon}
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Tab Content */}
-        <div className="p-6 sm:p-8">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              Recommended Items
-            </h2>
-            <button
-              onClick={fetchData}
-              className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 rounded-lg font-bold hover:bg-emerald-200 dark:hover:bg-emerald-500/30 transition-colors text-sm"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Regenerate Plan
+              {generating ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Generating Smart Plan...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-5 h-5" />
+                  Generate My Meal Plan
+                </>
+              )}
             </button>
           </div>
-
-          {plan[activeTab]?.items?.length > 0 ? (
-            <ul className="space-y-3 mb-6">
-              {plan[activeTab].items.map((food: string, i: number) => (
-                <li key={i} className="flex items-start gap-3 text-slate-700 dark:text-slate-300 font-medium">
-                  <div className="mt-1 h-2 w-2 rounded-full bg-emerald-500 shrink-0"></div>
-                  {food}
-                </li>
+        ) : (
+          /* Loaded Plan Content */
+          <>
+            <div className="flex overflow-x-auto border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
+              {mealTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex-1 flex items-center justify-center gap-2 py-4 px-4 text-sm font-bold transition-all border-b-2 whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-900"
+                      : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  {tab.icon}
+                  {tab.label}
+                </button>
               ))}
-            </ul>
-          ) : (
-            <p className="text-slate-500 dark:text-slate-400 italic mb-6">
-              No suggestions available for this meal yet.
-            </p>
-          )}
-
-          {plan[activeTab]?.calories && (
-            <div className="inline-flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700">
-              <Flame className="w-4 h-4 text-orange-500" />
-              <span className="font-bold text-slate-900 dark:text-white">
-                Estimated Calories: <span className="text-orange-600 dark:text-orange-400">{plan[activeTab].calories}</span>
-              </span>
             </div>
-          )}
-        </div>
+
+            <div className="p-6 sm:p-8">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  Recommended Items
+                </h2>
+                <button
+                  onClick={generateAIContent}
+                  disabled={generating}
+                  className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 rounded-lg font-bold hover:bg-emerald-200 dark:hover:bg-emerald-500/30 transition-colors text-sm disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
+                  Regenerate
+                </button>
+              </div>
+
+              {plan[activeTab]?.items?.length > 0 ? (
+                <ul className="space-y-3 mb-6">
+                  {plan[activeTab].items.map((food: string, i: number) => (
+                    <li key={i} className="flex items-start gap-3 text-slate-700 dark:text-slate-300 font-medium">
+                      <div className="mt-1 h-2 w-2 rounded-full bg-emerald-500 shrink-0"></div>
+                      {food}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-slate-500 dark:text-slate-400 italic mb-6">
+                  No suggestions available for this meal yet.
+                </p>
+              )}
+
+              {plan[activeTab]?.calories && (
+                <div className="inline-flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <Flame className="w-4 h-4 text-orange-500" />
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    Estimated Calories: <span className="text-orange-600 dark:text-orange-400">{plan[activeTab].calories}</span>
+                  </span>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Grid for Tips & Schedule */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 🌿 AI Tips Section */}
+        {/* AI Tips Section */}
         <div className="bg-emerald-50 dark:bg-emerald-900/10 rounded-2xl border border-emerald-100 dark:border-emerald-500/20 shadow-sm p-6">
           <div className="flex items-center gap-2 mb-4">
             <Lightbulb className="text-emerald-600 dark:text-emerald-400 w-6 h-6" />
@@ -274,11 +275,12 @@ export default function AIFoodPlan() {
               AI Health Tips
             </h2>
           </div>
+          
           {loadingTips ? (
             <div className="flex justify-center py-8">
               <Loader2 className="w-6 h-6 text-emerald-500 animate-spin" />
             </div>
-          ) : (
+          ) : aiTips.length > 0 ? (
             <ul className="space-y-3 text-emerald-900 dark:text-emerald-100/70 font-medium">
               {aiTips.map((tip, i) => (
                 <li key={i} className="flex items-start gap-3">
@@ -287,6 +289,10 @@ export default function AIFoodPlan() {
                 </li>
               ))}
             </ul>
+          ) : (
+            <p className="text-emerald-700/60 dark:text-emerald-400/60 italic">
+              Generate a meal plan to unlock personalized health tips.
+            </p>
           )}
         </div>
 
@@ -338,10 +344,9 @@ export default function AIFoodPlan() {
         <div className="h-px bg-slate-200 dark:bg-slate-800 flex-1"></div>
       </div>
 
-      {/* ---------------- DASHBOARD FOOTER & CTA ---------------- */}
+      {/* Footer / CTA */}
       <footer className="mt-12 bg-slate-900 dark:bg-slate-950 rounded-3xl overflow-hidden shadow-xl border border-slate-800">
         <div className="grid grid-cols-1 lg:grid-cols-2">
-          {/* CTA Section */}
           <div className="p-8 sm:p-10 flex flex-col justify-center bg-gradient-to-br from-slate-900 to-slate-800">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider w-max mb-4">
               <Zap className="h-3.5 w-3.5" fill="currentColor" />
@@ -351,18 +356,13 @@ export default function AIFoodPlan() {
               Unlock Unlimited Meals
             </h2>
             <p className="text-slate-400 font-medium mb-8 max-w-md">
-              You are currently using 1 of your 3 free daily AI generations. Upgrade to Pro to remove all limits and customize every macro.
+              Upgrade to Pro to remove all daily generation limits and customize every single macro for faster results.
             </p>
-            <a
-              href="/upgrade"
-              className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-emerald-500 text-slate-950 font-bold rounded-xl shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 transition-all duration-300 hover:-translate-y-0.5 w-max"
-            >
+            <a href="/upgrade" className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-emerald-500 text-slate-950 font-bold rounded-xl shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 transition-all duration-300 hover:-translate-y-0.5 w-max">
               Upgrade to Pro Now
               <ArrowRight className="h-5 w-5" />
             </a>
           </div>
-
-          {/* Links Section */}
           <div className="p-8 sm:p-10 border-t lg:border-t-0 lg:border-l border-slate-800 bg-slate-900/50 flex flex-col justify-between">
             <div className="grid grid-cols-2 gap-8 mb-8">
               <div>
@@ -380,19 +380,16 @@ export default function AIFoodPlan() {
                 </ul>
               </div>
             </div>
-            
             <p className="text-slate-500 text-xs font-medium border-t border-slate-800 pt-6 mt-auto">
               &copy; {new Date().getFullYear()} SmartMealAI. Empowering your fitness journey.
             </p>
           </div>
         </div>
       </footer>
-
     </div>
   );
 }
 
-// Small reusable badge
 function Badge({ label, value, color, className = "" }: any) {
   const colorMap: any = {
     emerald: "bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
@@ -400,9 +397,7 @@ function Badge({ label, value, color, className = "" }: any) {
     amber: "bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20",
   };
   return (
-    <div
-      className={`flex flex-col justify-center px-4 py-4 rounded-xl border shadow-sm text-center w-full ${colorMap[color]}`}
-    >
+    <div className={`flex flex-col justify-center px-4 py-4 rounded-xl border shadow-sm text-center w-full ${colorMap[color]}`}>
       <p className="text-xs font-bold uppercase tracking-wider opacity-70 mb-1">{label}</p>
       <p className={`font-black text-xl ${className}`}>{value || "—"}</p>
     </div>

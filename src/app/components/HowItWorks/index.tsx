@@ -33,7 +33,7 @@ export default function HowItWorks() {
 
   return (
     <section id="how-it-works" className="py-24 sm:py-32 bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-2 lg:px-8">
         
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-16 sm:mb-24">
@@ -62,11 +62,11 @@ export default function HowItWorks() {
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: index * 0.15 }}
                 viewport={{ once: true, margin: "-100px" }}
-                className="relative flex items-start gap-6 sm:gap-10 group"
+                className="relative flex items-start gap-0 md:gap-6 group"
               >
                 {/* Icon Node */}
                 <div className="relative z-10 flex-shrink-0 flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
-                  <div className="flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 shadow-sm group-hover:border-emerald-500/50 dark:group-hover:border-emerald-500/50 group-hover:shadow-emerald-500/20 transition-all duration-300">
+                  <div className="flex items-center justify-center w-10 h-12 sm:w-16 sm:h-16 rounded-full bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 shadow-sm group-hover:border-emerald-500/50 dark:group-hover:border-emerald-500/50 group-hover:shadow-emerald-500/20 transition-all duration-300">
                     {step.icon}
                   </div>
                 </div>
